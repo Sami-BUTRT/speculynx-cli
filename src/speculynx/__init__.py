@@ -1,0 +1,1 @@
+"""Speculynx CLI package."""
