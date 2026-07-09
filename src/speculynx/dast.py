@@ -1,9 +1,12 @@
 import httpx
-import json
-import time
+import ipaddress
 from pathlib import Path
-from typing import Optional
+from urllib.parse import urlparse
 import typer
+
+
+SAFE_METHODS = {"get"}
+UNSAFE_METHODS = {"post", "put", "patch", "delete"}
 
 # ==============================================================================
 # FORGE DE REQUÊTES
@@ -30,16 +33,54 @@ def get_path_params(methods: dict) -> dict:
 # CHECKS DAST
 # ==============================================================================
 
-def check_dast_auth_bypass(client: httpx.Client, base_url: str, openapi_data: dict) -> dict:
+def is_private_or_local_target(base_url: str) -> bool:
+    host = urlparse(base_url).hostname
+    if not host:
+        return False
+    host = host.lower()
+    if host == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private or ip.is_unspecified
+
+
+def planned_requests(openapi_data: dict, base_url: str, *, allow_unsafe_methods: bool) -> list[tuple[str, str]]:
+    requests = []
+    paths = openapi_data.get("paths", {})
+    allowed_methods = SAFE_METHODS | (UNSAFE_METHODS if allow_unsafe_methods else set())
+    for path, methods in list(paths.items())[:5]:
+        if not isinstance(methods, dict):
+            continue
+        path_params = get_path_params(methods)
+        url = forge_url(base_url, path, path_params)
+        for method in ["get", "post", "put", "patch", "delete"]:
+            if method in methods and method in allowed_methods:
+                requests.append((method.upper(), url))
+    return requests
+
+
+def check_dast_auth_bypass(
+    client: httpx.Client,
+    base_url: str,
+    openapi_data: dict,
+    *,
+    allow_unsafe_methods: bool = False,
+) -> dict:
     """DAST-01 : Vérifie si des endpoints répondent 200 sans authentification."""
     findings = []
     paths = openapi_data.get("paths", {})
+    allowed_methods = SAFE_METHODS | (UNSAFE_METHODS if allow_unsafe_methods else set())
 
     for path, methods in list(paths.items())[:5]:  # limite à 5 paths pour le MVP
+        if not isinstance(methods, dict):
+            continue
         path_params = get_path_params(methods)
         url = forge_url(base_url, path, path_params)
-        for method in ["get", "post", "put", "delete"]:
-            if method not in methods:
+        for method in ["get", "post", "put", "patch", "delete"]:
+            if method not in methods or method not in allowed_methods:
                 continue
             try:
                 resp = client.request(method.upper(), url, timeout=5)
@@ -55,12 +96,18 @@ def check_dast_auth_bypass(client: httpx.Client, base_url: str, openapi_data: di
         "severity": "CRITIQUE",
         "passed": passed,
         "dynamic": True,
-        "description": "Envoie des requêtes sans token et vérifie si l'API répond 200.",
+        "description": "Envoie des requêtes sans token et vérifie si l'API répond 200. Par défaut, seules les méthodes GET sont envoyées.",
         "fail_message": f"Endpoints accessibles sans auth : {findings}" if findings else None
     }
 
 
-def check_dast_verbose_errors(client: httpx.Client, base_url: str, openapi_data: dict) -> dict:
+def check_dast_verbose_errors(
+    client: httpx.Client,
+    base_url: str,
+    openapi_data: dict,
+    *,
+    allow_unsafe_methods: bool = False,
+) -> dict:
     """DAST-03 : Envoie des données malformées (non destructrices) et cherche des stack traces.
 
     IMPORTANT : les payloads ci-dessous sont volontairement non-destructeurs.
@@ -69,6 +116,17 @@ def check_dast_verbose_errors(client: httpx.Client, base_url: str, openapi_data:
     (ex: un ancien payload '; DROP TABLE users; --' pouvait être exécuté pour de
     vrai sur une cible vulnérable et non protégée).
     """
+    if not allow_unsafe_methods:
+        return {
+            "id": "DAST-03",
+            "name": "Verbose Errors / Info Leak",
+            "severity": "ÉLEVÉE",
+            "passed": True,
+            "dynamic": True,
+            "description": "Check ignoré par défaut car il nécessite POST/PUT. Utilisez --allow-unsafe-methods pour l'autoriser explicitement.",
+            "fail_message": None
+        }
+
     findings = []
     paths = openapi_data.get("paths", {})
     error_keywords = ["traceback", "exception", "error at line", "syntaxerror",
@@ -148,7 +206,13 @@ def check_dast_rate_limit(client: httpx.Client, base_url: str, openapi_data: dic
 # CHEF D'ORCHESTRE DAST
 # ==============================================================================
 
-def run_dast_audit(file_path: Path, base_url: str, insecure: bool = False) -> list:
+def run_dast_audit(
+    file_path: Path,
+    base_url: str,
+    insecure: bool = False,
+    allow_unsafe_methods: bool = False,
+    dry_run: bool = False,
+) -> list:
     """
     Lance l'audit DAST complet.
     base_url : ex. https://api.example.com
@@ -160,14 +224,34 @@ def run_dast_audit(file_path: Path, base_url: str, insecure: bool = False) -> li
 
     typer.echo(typer.style(f"\n[TARGET] Cible DAST : {base_url}", fg=typer.colors.CYAN))
     typer.echo(typer.style("[WARN] Mode DAST : requêtes réelles envoyées à l'API cible\n", fg=typer.colors.YELLOW))
+    if not allow_unsafe_methods:
+        typer.echo(typer.style("[SAFE] Méthodes non sûres désactivées par défaut : POST, PUT, PATCH, DELETE.", fg=typer.colors.YELLOW))
+    if dry_run:
+        typer.echo(typer.style("[DRY-RUN] Aucune requête HTTP ne sera envoyée.", fg=typer.colors.CYAN))
     if insecure:
         typer.echo(typer.style("[WARN] Vérification TLS désactivée (--insecure) - risque MITM assumé.\n", fg=typer.colors.RED))
+    if is_private_or_local_target(base_url):
+        typer.echo(typer.style("[WARN] Cible locale ou privée détectée. Vérifiez explicitement votre autorisation et l'environnement.", fg=typer.colors.YELLOW))
+
+    if dry_run:
+        requests = planned_requests(openapi_data, base_url, allow_unsafe_methods=allow_unsafe_methods)
+        for method, url in requests:
+            typer.echo(f"[DRY-RUN] {method} {url}")
+        return [{
+            "id": "DAST-DRY-RUN",
+            "name": "Plan de scan live",
+            "severity": "INFO",
+            "passed": True,
+            "dynamic": True,
+            "description": "Dry-run exécuté sans envoyer de requêtes HTTP.",
+            "fail_message": None
+        }]
 
     # Client HTTP sans authentification (test d'auth bypass)
     with httpx.Client(verify=not insecure, follow_redirects=True) as client:
         results = [
-            check_dast_auth_bypass(client, base_url, openapi_data),
-            check_dast_verbose_errors(client, base_url, openapi_data),
+            check_dast_auth_bypass(client, base_url, openapi_data, allow_unsafe_methods=allow_unsafe_methods),
+            check_dast_verbose_errors(client, base_url, openapi_data, allow_unsafe_methods=allow_unsafe_methods),
             check_dast_rate_limit(client, base_url, openapi_data),
         ]
 

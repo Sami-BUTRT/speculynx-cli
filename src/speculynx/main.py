@@ -116,7 +116,9 @@ def scan_live(
     target: str = typer.Option(..., "--target", "-t", help="URL de base de l'API cible (ex: https://api.example.com)"),
     export: Optional[Path] = typer.Option(None, "--export", "-e", help="[Pro] Exporter le rapport PDF."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Confirme l'autorisation sans prompt interactif (ex: usage en CI)."),
-    insecure: bool = typer.Option(False, "--insecure", help="Désactive la vérification TLS (déconseillé, sauf certificat auto-signé connu).")
+    insecure: bool = typer.Option(False, "--insecure", help="Désactive la vérification TLS (déconseillé, sauf certificat auto-signé connu)."),
+    allow_unsafe_methods: bool = typer.Option(False, "--allow-unsafe-methods", help="Autorise explicitement POST, PUT, PATCH et DELETE pendant scan-live."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Affiche les requêtes prévues sans envoyer de requêtes HTTP.")
 ):
     """[Pro] Lance un audit DAST : envoie de vraies requêtes à l'API cible."""
     saved_key = _load_saved_license_key()
@@ -136,6 +138,10 @@ def scan_live(
     typer.echo(typer.style("[PRO] Mode Pro activé - DAST", fg=typer.colors.MAGENTA, bold=True))
     typer.echo(typer.style(f"[TARGET] Cible : {target}", fg=typer.colors.CYAN))
     typer.echo(typer.style("[WARN] Des requêtes réelles vont être envoyées à l'API cible.\n", fg=typer.colors.YELLOW))
+    if not allow_unsafe_methods:
+        typer.echo("[SAFE] Par défaut, scan-live n'envoie que des requêtes GET. POST, PUT, PATCH et DELETE sont désactivées.")
+    if dry_run:
+        typer.echo("[DRY-RUN] Mode simulation : aucune requête HTTP ne sera envoyée.")
 
     if not yes:
         confirmed = typer.confirm(
@@ -146,7 +152,13 @@ def scan_live(
             typer.echo(typer.style("[ERROR] Scan annulé : autorisation non confirmée.", fg=typer.colors.RED))
             raise typer.Exit(code=1)
 
-    dast_results = run_dast_audit(file, target, insecure=insecure)
+    dast_results = run_dast_audit(
+        file,
+        target,
+        insecure=insecure,
+        allow_unsafe_methods=allow_unsafe_methods,
+        dry_run=dry_run,
+    )
     _print_results(dast_results)
 
     if export:
