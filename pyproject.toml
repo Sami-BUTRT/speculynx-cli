@@ -8,6 +8,10 @@ version = "0.1.0"
 description = "Local-first OpenAPI 3.0/3.1 security audit CLI"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
+authors = [
+    { name = "Sami-BUTRT" },
+]
+license = "MIT"
 dependencies = [
     "typer>=0.12,<1",
     "PyYAML>=6,<7",
@@ -15,9 +19,26 @@ dependencies = [
     "fpdf2>=2.7,<3",
     "keyring>=25,<26",
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
+]
 
 [project.scripts]
 speculynx = "speculynx.main:app"
+
+[project.urls]
+Homepage = "https://github.com/Sami-BUTRT/speculynx-cli"
+Repository = "https://github.com/Sami-BUTRT/speculynx-cli"
+Issues = "https://github.com/Sami-BUTRT/speculynx-cli/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
