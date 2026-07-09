@@ -1,7 +1,9 @@
 import httpx
+import sys
 from pathlib import Path
 from fpdf import FPDF
 import keyring
+import typer
 from keyring.errors import KeyringError
 
 BACKEND_URL = "https://api.speculynx.dev"
@@ -20,9 +22,22 @@ class LicenseKeyStorageError(RuntimeError):
     """Raised when the operating-system credential store is unavailable."""
 
 
+def safe_echo(message=None, *, err: bool = False, **kwargs) -> None:
+    """Write terminal output without failing on the active console encoding."""
+    stream = kwargs.get("file") or (sys.stderr if err else sys.stdout)
+    text = "" if message is None else str(message)
+    encoding = getattr(stream, "encoding", None)
+    if encoding:
+        try:
+            text = text.encode(encoding, errors="replace").decode(encoding)
+        except LookupError:
+            pass
+    typer.echo(text, err=err, **kwargs)
+
+
 def _warn_if_legacy_storage_exists() -> None:
     if LEGACY_CONFIG_FILE.exists():
-        print(LEGACY_STORAGE_WARNING)
+        safe_echo(LEGACY_STORAGE_WARNING)
 
 
 def save_license_key(key: str) -> None:

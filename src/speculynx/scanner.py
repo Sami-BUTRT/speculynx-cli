@@ -4,6 +4,8 @@ import yaml
 from pathlib import Path
 import typer
 
+from speculynx.utils import safe_echo
+
 
 SUPPORTED_OPENAPI_VERSION = re.compile(r"^3\.(?:0|1)\.\d+$")
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
@@ -195,7 +197,7 @@ def load_openapi_file(file_path: Path) -> dict:
                 raise ValueError("Format non supporté (uniquement .json, .yaml, .yml).")
         return validate_openapi_version(openapi_data)
     except Exception as e:
-        typer.echo(typer.style(f"[ERROR] Erreur de chargement : {e}", fg=typer.colors.RED))
+        safe_echo(typer.style(f"[ERROR] Erreur de chargement : {e}", fg=typer.colors.RED))
         raise typer.Exit(code=1)
 
 

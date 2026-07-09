@@ -4,6 +4,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 import typer
 
+from speculynx.utils import safe_echo
+
 
 SAFE_METHODS = {"get"}
 UNSAFE_METHODS = {"post", "put", "patch", "delete"}
@@ -222,21 +224,21 @@ def run_dast_audit(
     from speculynx.scanner import load_openapi_file
     openapi_data = load_openapi_file(file_path)
 
-    typer.echo(typer.style(f"\n[TARGET] Cible DAST : {base_url}", fg=typer.colors.CYAN))
-    typer.echo(typer.style("[WARN] Mode DAST : requêtes réelles envoyées à l'API cible\n", fg=typer.colors.YELLOW))
+    safe_echo(typer.style(f"\n[TARGET] Cible DAST : {base_url}", fg=typer.colors.CYAN))
+    safe_echo(typer.style("[WARN] Mode DAST : requêtes réelles envoyées à l'API cible\n", fg=typer.colors.YELLOW))
     if not allow_unsafe_methods:
-        typer.echo(typer.style("[SAFE] Méthodes non sûres désactivées par défaut : POST, PUT, PATCH, DELETE.", fg=typer.colors.YELLOW))
+        safe_echo(typer.style("[SAFE] Méthodes non sûres désactivées par défaut : POST, PUT, PATCH, DELETE.", fg=typer.colors.YELLOW))
     if dry_run:
-        typer.echo(typer.style("[DRY-RUN] Aucune requête HTTP ne sera envoyée.", fg=typer.colors.CYAN))
+        safe_echo(typer.style("[DRY-RUN] Aucune requête HTTP ne sera envoyée.", fg=typer.colors.CYAN))
     if insecure:
-        typer.echo(typer.style("[WARN] Vérification TLS désactivée (--insecure) - risque MITM assumé.\n", fg=typer.colors.RED))
+        safe_echo(typer.style("[WARN] Vérification TLS désactivée (--insecure) - risque MITM assumé.\n", fg=typer.colors.RED))
     if is_private_or_local_target(base_url):
-        typer.echo(typer.style("[WARN] Cible locale ou privée détectée. Vérifiez explicitement votre autorisation et l'environnement.", fg=typer.colors.YELLOW))
+        safe_echo(typer.style("[WARN] Cible locale ou privée détectée. Vérifiez explicitement votre autorisation et l'environnement.", fg=typer.colors.YELLOW))
 
     if dry_run:
         requests = planned_requests(openapi_data, base_url, allow_unsafe_methods=allow_unsafe_methods)
         for method, url in requests:
-            typer.echo(f"[DRY-RUN] {method} {url}")
+            safe_echo(f"[DRY-RUN] {method} {url}")
         return [{
             "id": "DAST-DRY-RUN",
             "name": "Plan de scan live",
