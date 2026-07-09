@@ -10,7 +10,7 @@ KEYRING_ACCOUNT_NAME = "license_key"
 LEGACY_CONFIG_FILE = Path.home() / ".speculynx.json"
 
 LEGACY_STORAGE_WARNING = (
-    "⚠️ Ancien stockage ~/.speculynx.json détecté et ignoré. "
+    "[WARN] Ancien stockage ~/.speculynx.json détecté et ignoré. "
     "Utilisez 'speculynx login'."
 )
 KEYRING_ERROR_MESSAGE = "Impossible d'accéder au coffre sécurisé du système."

@@ -6,8 +6,12 @@ from io import StringIO
 from pathlib import Path
 
 import typer
+from typer.testing import CliRunner
+from unittest.mock import patch
 
+from speculynx import main
 from speculynx.scanner import load_openapi_file
+from speculynx.scanner import run_audit
 
 
 class OpenAPIVersionTests(unittest.TestCase):
@@ -42,6 +46,34 @@ class OpenAPIVersionTests(unittest.TestCase):
 
     def test_rejects_openapi_2_0_0(self):
         self.assert_document_rejected({"openapi": "2.0.0"})
+
+
+class FixtureScanTests(unittest.TestCase):
+    def test_scans_openapi_fixture_without_network_or_pro_license(self):
+        fixture_path = Path(__file__).parent / "fixtures" / "api_test.yaml"
+
+        results = run_audit(fixture_path, is_pro=False)
+
+        self.assertEqual(["KEY-EXP-01", "KEY-EXP-02"], [r["id"] for r in results])
+        self.assertFalse(results[0]["passed"])
+        self.assertFalse(results[1]["passed"])
+
+    def test_scan_output_uses_ascii_prefixes(self):
+        fixture_path = Path(__file__).parent / "fixtures" / "api_test.yaml"
+        runner = CliRunner()
+
+        with patch("speculynx.main._load_saved_license_key", return_value=None):
+            result = runner.invoke(
+                main.app,
+                ["scan", "--file", str(fixture_path)],
+            )
+
+        self.assertEqual(0, result.exit_code, result.output)
+        for symbol in ("⚡", "🚨", "✅", "❌", "⚠️", "🛑", "📄", "🌐", "📊", "↳"):
+            self.assertNotIn(symbol, result.output)
+        self.assertIn("[FREE] Mode Free", result.output)
+        self.assertIn("[SCAN] [FINDING]", result.output)
+        self.assertIn("[RESULT] Résultat", result.output)
 
 
 if __name__ == "__main__":

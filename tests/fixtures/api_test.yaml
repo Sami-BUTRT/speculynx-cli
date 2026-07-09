@@ -1,0 +1,27 @@
+openapi: 3.0.3
+info:
+  title: Speculynx CLI fixture API
+  version: 1.0.0
+servers:
+  - url: http://api.example.test
+components:
+  securitySchemes:
+    StaticApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Static API key used by legacy clients.
+paths:
+  /public-export:
+    get:
+      summary: Public export endpoint intentionally missing operation security
+      parameters:
+        - name: api_token
+          in: query
+          required: false
+          schema:
+            type: string
+          example: hardcoded-token-for-local-fixture
+      responses:
+        "200":
+          description: Export completed

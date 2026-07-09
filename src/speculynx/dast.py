@@ -44,7 +44,7 @@ def check_dast_auth_bypass(client: httpx.Client, base_url: str, openapi_data: di
             try:
                 resp = client.request(method.upper(), url, timeout=5)
                 if resp.status_code == 200:
-                    findings.append(f"{method.upper()} {url} → 200 sans token")
+                    findings.append(f"{method.upper()} {url} -> 200 sans token")
             except Exception:
                 pass
 
@@ -95,7 +95,7 @@ def check_dast_verbose_errors(client: httpx.Client, base_url: str, openapi_data:
                     )
                     body = resp.text.lower()
                     if any(kw in body for kw in error_keywords):
-                        findings.append(f"{method.upper()} {url} → stack trace détectée")
+                        findings.append(f"{method.upper()} {url} -> stack trace détectée")
                         break  # un seul finding par endpoint suffit
                 except Exception:
                     pass
@@ -158,10 +158,10 @@ def run_dast_audit(file_path: Path, base_url: str, insecure: bool = False) -> li
     from speculynx.scanner import load_openapi_file
     openapi_data = load_openapi_file(file_path)
 
-    typer.echo(typer.style(f"\n🌐 Cible DAST : {base_url}", fg=typer.colors.CYAN))
-    typer.echo(typer.style("⚠️  Mode DAST : requêtes réelles envoyées à l'API cible\n", fg=typer.colors.YELLOW))
+    typer.echo(typer.style(f"\n[TARGET] Cible DAST : {base_url}", fg=typer.colors.CYAN))
+    typer.echo(typer.style("[WARN] Mode DAST : requêtes réelles envoyées à l'API cible\n", fg=typer.colors.YELLOW))
     if insecure:
-        typer.echo(typer.style("⚠️  Vérification TLS désactivée (--insecure) — risque MITM assumé.\n", fg=typer.colors.RED))
+        typer.echo(typer.style("[WARN] Vérification TLS désactivée (--insecure) - risque MITM assumé.\n", fg=typer.colors.RED))
 
     # Client HTTP sans authentification (test d'auth bypass)
     with httpx.Client(verify=not insecure, follow_redirects=True) as client:

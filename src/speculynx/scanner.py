@@ -35,7 +35,7 @@ def load_openapi_file(file_path: Path) -> dict:
                 raise ValueError("Format non supporté (uniquement .json, .yaml, .yml).")
         return validate_openapi_version(openapi_data)
     except Exception as e:
-        typer.echo(typer.style(f"❌ Erreur de chargement : {e}", fg=typer.colors.RED))
+        typer.echo(typer.style(f"[ERROR] Erreur de chargement : {e}", fg=typer.colors.RED))
         raise typer.Exit(code=1)
 
 
