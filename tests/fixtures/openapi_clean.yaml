@@ -1,0 +1,63 @@
+openapi: 3.0.3
+info:
+  title: Clean Speculynx API
+  version: 1.2.0
+servers:
+  - url: https://api.example.test
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: Access token expires after 15 minutes and supports refresh.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.test/oauth/authorize
+          tokenUrl: https://auth.example.test/oauth/token
+          scopes:
+            users:read: Read user resources
+            admin:roles:write: Manage user roles
+security:
+  - OAuth2:
+      - users:read
+paths:
+  /health:
+    get:
+      security: []
+      tags:
+        - system
+      responses:
+        "200":
+          description: OK
+  /users/{userId}:
+    get:
+      tags:
+        - users
+      security:
+        - OAuth2:
+            - users:read
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User summary
+  /admin/users/{userId}/role:
+    patch:
+      tags:
+        - admin
+      operationId: updateRole
+      security:
+        - OAuth2:
+            - admin:roles:write
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Updated

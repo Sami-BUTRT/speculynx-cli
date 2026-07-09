@@ -1,0 +1,38 @@
+openapi: 3.0.3
+info:
+  title: Rate Limited Speculynx API
+  version: 1.0.0
+servers:
+  - url: https://api.example.test
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: Access token expires after 15 minutes.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.test/oauth/authorize
+          tokenUrl: https://auth.example.test/oauth/token
+          scopes:
+            auth:login: Login
+security:
+  - OAuth2:
+      - auth:login
+paths:
+  /login:
+    post:
+      tags:
+        - auth
+      responses:
+        "200":
+          description: Logged in
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+        "429":
+          description: Too many requests
+          headers:
+            Retry-After:
+              schema:
+                type: integer

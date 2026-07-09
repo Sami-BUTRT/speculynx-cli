@@ -1,0 +1,87 @@
+openapi: 3.0.3
+info:
+  title: Risky Pro Speculynx API
+  version: ""
+servers:
+  - url: https://api.example.test
+components:
+  schemas:
+    UserSecret:
+      type: object
+      properties:
+        id:
+          type: string
+        password:
+          type: string
+        private_key:
+          type: string
+        email:
+          type: string
+    WebhookRegistration:
+      type: object
+      properties:
+        callbackUrl:
+          type: string
+          format: uri
+    TokenExample:
+      type: object
+      properties:
+        api_key:
+          type: string
+          example: sk_live_1234567890abcdef
+paths:
+  /users/{userId}:
+    get:
+      tags:
+        - users
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User with sensitive fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSecret"
+  /admin/users/{userId}/role:
+    patch:
+      operationId: updateRole
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Role updated
+  /webhooks/import:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookRegistration"
+      responses:
+        "202":
+          description: Accepted
+  /login:
+    post:
+      responses:
+        "200":
+          description: Logged in
+  /v1/legacy:
+    get:
+      deprecated: true
+      responses:
+        "200":
+          description: Legacy
+  /v2/legacy:
+    get:
+      responses:
+        "200":
+          description: Current

@@ -1,0 +1,27 @@
+openapi: 3.0.3
+info:
+  title: Public Health Speculynx API
+  version: 1.0.0
+servers:
+  - url: https://api.example.test
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT expires after 15 minutes.
+security:
+  - BearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        "200":
+          description: OK
+  /ping:
+    get:
+      security: []
+      responses:
+        "200":
+          description: pong
