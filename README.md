@@ -19,7 +19,7 @@ python -m pip install -e .
 After a package build, install the wheel locally:
 
 ```powershell
-python -m pip install dist\speculynx-0.1.0-py3-none-any.whl
+python -m pip install dist\speculynx-0.1.1-py3-none-any.whl
 ```
 
 ## Commands
