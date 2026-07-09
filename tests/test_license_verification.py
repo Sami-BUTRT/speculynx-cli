@@ -14,6 +14,16 @@ from speculynx import utils
 
 
 TEST_KEY = "test-license-key"
+FIXTURE_PATH = Path(__file__).parent / "fixtures" / "api_test.yaml"
+FREE_RESULTS = [
+    {
+        "id": "KEY-EXP-01",
+        "name": "Clés exposées dans l'URL",
+        "severity": "ÉLEVÉE",
+        "passed": False,
+        "fail_message": "Des clés API sont passées en paramètres de requête.",
+    }
+]
 
 
 class LicenseVerificationTests(unittest.TestCase):
@@ -38,6 +48,10 @@ class LicenseVerificationTests(unittest.TestCase):
             headers={"Authorization": f"Bearer {TEST_KEY}"},
             timeout=5,
         )
+        self.assertNotIn("json", post.call_args.kwargs)
+        self.assertNotIn("data", post.call_args.kwargs)
+        self.assertNotIn("content", post.call_args.kwargs)
+        self.assertNotIn("files", post.call_args.kwargs)
 
     @patch("speculynx.utils.httpx.post")
     def test_invalid_license_stays_free(self, post):
@@ -114,6 +128,147 @@ class LicenseVerificationTests(unittest.TestCase):
         verify_license.assert_not_called()
         run_audit.assert_called_once_with(openapi_path, is_pro=False)
         self.assertTrue(echo.called)
+
+
+class ScanModeAuthorizationTests(unittest.TestCase):
+    @patch("speculynx.main.typer.echo")
+    @patch("speculynx.main.generate_pdf_report")
+    @patch("speculynx.main.run_audit", return_value=FREE_RESULTS)
+    @patch("speculynx.main.verify_license_online")
+    @patch("speculynx.main._load_saved_license_key", return_value=None)
+    def test_free_scan_without_key_uses_no_network_no_pro_rules_or_pdf(
+        self,
+        load_license_key,
+        verify_license,
+        run_audit,
+        generate_pdf,
+        echo,
+    ):
+        export_path = Path("report.pdf")
+
+        main.scan(file=FIXTURE_PATH, export=export_path)
+
+        load_license_key.assert_called_once_with(allow_free_on_error=True)
+        verify_license.assert_not_called()
+        run_audit.assert_called_once_with(FIXTURE_PATH, is_pro=False)
+        generate_pdf.assert_not_called()
+        rendered_output = " ".join(str(call) for call in echo.call_args_list)
+        self.assertIn("Mode Free", rendered_output)
+        self.assertIn("Export refusé", rendered_output)
+
+    @patch("speculynx.main._delete_saved_license_key")
+    @patch("speculynx.main.typer.echo")
+    @patch("speculynx.main.generate_pdf_report")
+    @patch("speculynx.main.run_audit", return_value=FREE_RESULTS)
+    @patch("speculynx.main.verify_license_online")
+    @patch("speculynx.main._load_saved_license_key", return_value=TEST_KEY)
+    def test_invalid_license_blocks_pro_features(
+        self,
+        load_license_key,
+        verify_license,
+        run_audit,
+        generate_pdf,
+        echo,
+        delete_license_key,
+    ):
+        verify_license.return_value = {
+            "valid": False,
+            "plan": "free",
+            "status": "invalid",
+        }
+
+        main.scan(file=FIXTURE_PATH, export=Path("report.pdf"))
+
+        load_license_key.assert_called_once_with(allow_free_on_error=True)
+        verify_license.assert_called_once_with(TEST_KEY)
+        delete_license_key.assert_called_once_with()
+        run_audit.assert_called_once_with(FIXTURE_PATH, is_pro=False)
+        generate_pdf.assert_not_called()
+
+    @patch("speculynx.main._delete_saved_license_key")
+    @patch("speculynx.main.typer.echo")
+    @patch("speculynx.main.generate_pdf_report")
+    @patch("speculynx.main.run_audit", return_value=FREE_RESULTS)
+    @patch("speculynx.main.verify_license_online")
+    @patch("speculynx.main._load_saved_license_key", return_value=TEST_KEY)
+    def test_network_error_blocks_pro_features_without_deleting_key(
+        self,
+        load_license_key,
+        verify_license,
+        run_audit,
+        generate_pdf,
+        echo,
+        delete_license_key,
+    ):
+        verify_license.return_value = {
+            "valid": False,
+            "plan": "free",
+            "status": "network_error",
+        }
+
+        main.scan(file=FIXTURE_PATH, export=Path("report.pdf"))
+
+        load_license_key.assert_called_once_with(allow_free_on_error=True)
+        verify_license.assert_called_once_with(TEST_KEY)
+        delete_license_key.assert_not_called()
+        run_audit.assert_called_once_with(FIXTURE_PATH, is_pro=False)
+        generate_pdf.assert_not_called()
+
+    @patch("speculynx.main.typer.echo")
+    @patch("speculynx.main.generate_pdf_report")
+    @patch("speculynx.main.run_audit", return_value=FREE_RESULTS)
+    @patch("speculynx.main.verify_license_online")
+    @patch("speculynx.main._load_saved_license_key", return_value=TEST_KEY)
+    def test_active_license_enables_pro_scan_and_export(
+        self,
+        load_license_key,
+        verify_license,
+        run_audit,
+        generate_pdf,
+        echo,
+    ):
+        export_path = Path("report.pdf")
+        verify_license.return_value = {
+            "valid": True,
+            "plan": "pro",
+            "status": "active",
+        }
+
+        main.scan(file=FIXTURE_PATH, export=export_path)
+
+        load_license_key.assert_called_once_with(allow_free_on_error=True)
+        verify_license.assert_called_once_with(TEST_KEY)
+        run_audit.assert_called_once_with(FIXTURE_PATH, is_pro=True)
+        generate_pdf.assert_called_once_with(
+            FIXTURE_PATH.name,
+            FREE_RESULTS,
+            export_path,
+        )
+
+    @patch("speculynx.utils.httpx.post")
+    def test_license_verification_never_sends_openapi_file_content(self, post):
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "valid": True,
+            "plan": "pro",
+            "status": "active",
+        }
+        post.return_value = response
+        openapi_contents = FIXTURE_PATH.read_text(encoding="utf-8")
+
+        utils.verify_license_online(TEST_KEY)
+
+        _, kwargs = post.call_args
+        rendered_call = repr(post.call_args)
+        self.assertEqual(
+            {"Authorization": f"Bearer {TEST_KEY}"},
+            kwargs["headers"],
+        )
+        self.assertNotIn("json", kwargs)
+        self.assertNotIn("data", kwargs)
+        self.assertNotIn("content", kwargs)
+        self.assertNotIn("files", kwargs)
+        self.assertNotIn(openapi_contents, rendered_call)
 
 
 class LicenseKeyStorageTests(unittest.TestCase):
