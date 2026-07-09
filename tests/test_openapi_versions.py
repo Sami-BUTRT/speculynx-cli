@@ -196,6 +196,68 @@ class FixtureScanTests(unittest.TestCase):
         auth_rule = self.get_rule(results, "AUTH-001")
         self.assertFalse(auth_rule["passed"])
 
+    def test_legacy_security_definitions_are_not_used_as_openapi_3_auth(self):
+        results = self.run_free_audit_for_document({
+            "openapi": "3.0.3",
+            "info": {"title": "Legacy Auth API", "version": "1.0.0"},
+            "securityDefinitions": {
+                "LegacyAuth": {
+                    "type": "apiKey",
+                    "name": "X-API-Key",
+                    "in": "header",
+                }
+            },
+            "security": [{"LegacyAuth": []}],
+            "paths": {"/items": {"get": {"responses": {"200": {"description": "OK"}}}}},
+        })
+
+        self.assertFalse(self.get_rule(results, "AUTH-001")["passed"])
+        self.assertTrue(self.get_rule(results, "KEY-EXP-02")["passed"])
+
+    def test_legacy_definitions_refs_are_not_resolved_by_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            file_path = Path(directory) / "openapi.json"
+            file_path.write_text(json.dumps({
+                "openapi": "3.0.3",
+                "info": {"title": "Legacy Ref API", "version": "1.0.0"},
+                "components": {
+                    "securitySchemes": {
+                        "BearerAuth": {
+                            "type": "http",
+                            "scheme": "bearer",
+                            "description": "JWT expires after 15 minutes.",
+                        }
+                    }
+                },
+                "security": [{"BearerAuth": []}],
+                "definitions": {
+                    "LegacySecret": {
+                        "type": "object",
+                        "properties": {"password": {"type": "string"}},
+                    }
+                },
+                "paths": {
+                    "/items": {
+                        "get": {
+                            "responses": {
+                                "200": {
+                                    "description": "OK",
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {"$ref": "#/definitions/LegacySecret"}
+                                        }
+                                    },
+                                }
+                            }
+                        }
+                    }
+                },
+            }), encoding="utf-8")
+
+            results = run_audit(file_path, is_pro=True)
+
+        self.assertTrue(self.get_rule(results, "DATA-001")["passed"])
+
     def test_scan_output_uses_ascii_prefixes(self):
         fixture_path = Path(__file__).parent / "fixtures" / "api_test.yaml"
         runner = CliRunner()

@@ -200,11 +200,12 @@ def load_openapi_file(file_path: Path) -> dict:
 
 
 def resolve_ref(ref: str, root: dict) -> dict:
-    """Résout une référence locale du type '#/components/schemas/Foo'
-    ou '#/definitions/Foo' (Swagger 2.0). Ne gère pas les $ref externes
-    (autre fichier/URL) : retourne {} dans ce cas plutôt que de planter.
+    """Résout une référence locale OpenAPI 3.x sous '#/components/'.
+    Ne gère pas les $ref externes : retourne {} plutôt que de planter.
     """
     if not isinstance(ref, str) or not ref.startswith('#/'):
+        return {}
+    if not ref.startswith('#/components/'):
         return {}
     node = root
     for part in ref.lstrip('#/').split('/'):
@@ -240,27 +241,13 @@ def deref(obj, root: dict, _seen: frozenset = frozenset()):
 
 
 def get_security_schemes(openapi_data: dict) -> dict:
-    """Retourne les security schemes, que la spec soit en OpenAPI 3.0
-    (components.securitySchemes) ou en Swagger 2.0 (securityDefinitions).
-    Les deux structures sont fusionnées si présentes (cas rare mais possible
-    sur des specs migrées partiellement)."""
-    schemes = {}
     components = openapi_data.get('components', {}) or {}
-    schemes.update(components.get('securitySchemes', {}) or {})
-    schemes.update(openapi_data.get('securityDefinitions', {}) or {})  # Swagger 2.0
+    schemes = components.get('securitySchemes', {}) or {}
     return deref(schemes, openapi_data)
 
 
 def normalize_oauth2_flows(scheme: dict) -> dict:
-    """Normalise les flows OAuth2 entre OpenAPI 3.0 ('flows': {implicit, ...})
-    et Swagger 2.0 (champs à plat : 'flow', 'scopes' directement sur le scheme)."""
-    if 'flows' in scheme:
-        return scheme.get('flows', {}) or {}
-    # Swagger 2.0 : un seul flow par scheme, scopes au même niveau
-    flow_name = scheme.get('flow')
-    if flow_name:
-        return {flow_name: {"scopes": scheme.get('scopes', {})}}
-    return {}
+    return scheme.get('flows', {}) or {}
 
 
 def has_usable_security(security, security_schemes: dict) -> bool:
