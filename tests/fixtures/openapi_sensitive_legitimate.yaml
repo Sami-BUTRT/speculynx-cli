@@ -1,0 +1,36 @@
+openapi: 3.0.3
+info:
+  title: Legitimate Sensitive Data API
+  version: 1.0.0
+servers:
+  - url: https://api.example.test
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT expires after 15 minutes.
+  schemas:
+    Profile:
+      type: object
+      properties:
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+security:
+  - BearerAuth: []
+paths:
+  /profile:
+    get:
+      tags:
+        - profile
+      responses:
+        "200":
+          description: Authenticated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"

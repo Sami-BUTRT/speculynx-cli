@@ -554,8 +554,9 @@ def check_pro_bola_patterns(openapi_data: dict) -> dict:
         "fail_message": (
             "Pattern à risque détecté : route objet avec identifiant direct "
             f"({', '.join(findings[:3])}). Ce n'est pas une preuve de BOLA. "
-            "Vérifiez côté backend le contrôle propriétaire de la ressource, "
-            "l'isolation tenant, user_id/account_id et les règles d'autorisation."
+            "L'analyse statique ne permet pas de confirmer une vulnérabilité runtime. "
+            "À vérifier côté backend : contrôle propriétaire de la ressource, "
+            "isolation tenant, user_id/account_id et règles d'autorisation."
         ) if findings else None
     }
 
@@ -589,7 +590,8 @@ def check_pro_bfla_privileged_routes(openapi_data: dict) -> dict:
         "fail_message": (
             "Cette route semble liée à une fonction privilégiée "
             f"({', '.join(findings[:3])}). Cela peut indiquer un risque BFLA "
-            "si le contrôle n'est pas fait côté serveur. À vérifier : scopes "
+            "si les rôles/scopes ne sont pas vérifiés côté serveur. L'analyse "
+            "statique ne confirme pas une faille runtime. À vérifier : scopes "
             "ou rôles précis, règles d'autorisation et séparation des privilèges."
         ) if findings else None
     }
@@ -620,8 +622,10 @@ def check_pro_sensitive_data(openapi_data: dict) -> dict:
         "description": "Repère les champs potentiellement sensibles dans schemas, réponses ou corps de requête.",
         "fail_message": (
             "Cette spec documente des champs potentiellement sensibles "
-            f"({', '.join(findings[:5])}). Vérifiez que ces données sont "
-            "nécessaires, minimisées, masquées ou protégées selon le contexte."
+            f"({', '.join(findings[:5])}). Ce signal doit être confirmé "
+            "manuellement selon le contexte métier. Vérifiez que ces données "
+            "sont nécessaires, minimisées, masquées ou protégées par un contrôle "
+            "d'accès côté serveur."
         ) if findings else None
     }
 
@@ -661,8 +665,9 @@ def check_pro_secret_examples(openapi_data: dict) -> dict:
         "description": "Repère les valeurs ressemblant à des secrets réels dans les examples, defaults, enums ou descriptions.",
         "fail_message": (
             "Une valeur ressemble à un secret réel dans la documentation OpenAPI "
-            f"({', '.join(findings[:5])}). Vérifiez qu'il ne s'agit pas d'une "
-            "clé valide et remplacez-la par un placeholder neutre."
+            f"({', '.join(findings[:5])}). Ce n'est pas une confirmation de "
+            "validité du secret. À vérifier : révocation/rotation si la valeur "
+            "est réelle, puis remplacement par un placeholder neutre."
         ) if findings else None
     }
 
@@ -691,7 +696,8 @@ def check_pro_ssrf_inputs(openapi_data: dict) -> dict:
         "fail_message": (
             "Cette opération accepte une URL fournie par le client "
             f"({', '.join(findings[:3])}). Si le serveur la contacte sans "
-            "validation stricte, cela peut créer un risque SSRF. À vérifier : "
+            "validation stricte, cela peut créer un risque SSRF. L'analyse statique "
+            "ne confirme pas l'usage backend de cette URL. À vérifier : "
             "allowlist, blocage des réseaux internes, validation de schéma et résolution DNS."
         ) if findings else None
     }
@@ -729,7 +735,8 @@ def check_pro_rate_limit_documentation(openapi_data: dict) -> dict:
         "fail_message": (
             "La spécification ne documente pas de limitation de débit pour cette "
             f"opération sensible ({', '.join(findings[:3])}). Vérifiez qu'un "
-            "contrôle existe côté gateway, backend ou infrastructure."
+            "contrôle existe côté gateway, backend ou infrastructure ; ce signal "
+            "ne prouve pas son absence runtime."
         ) if findings else None
     }
 
@@ -775,7 +782,8 @@ def check_pro_inventory_versioning(openapi_data: dict) -> dict:
         "fail_message": (
             "Des indices suggèrent que l'inventaire ou le versioning de l'API "
             f"pourrait être clarifié ({', '.join(findings[:4])}). Cela peut "
-            "compliquer la maintenance, la dépréciation et la surveillance de sécurité."
+            "compliquer la maintenance, la dépréciation et la surveillance de sécurité. "
+            "À vérifier avec les propriétaires API : catalogue, tags, versioning et plan de retrait."
         ) if findings else None
     }
 

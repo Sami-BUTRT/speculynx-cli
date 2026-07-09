@@ -1,0 +1,35 @@
+openapi: 3.0.3
+info:
+  title: Protected Object Routes API
+  version: 1.0.0
+servers:
+  - url: https://api.example.test
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: Access token expires after 15 minutes.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.test/oauth/authorize
+          tokenUrl: https://auth.example.test/oauth/token
+          scopes:
+            users:self:read: Read own user profile only
+security:
+  - OAuth2:
+      - users:self:read
+paths:
+  /users/{userId}:
+    get:
+      tags:
+        - users
+      description: Access is limited to the authenticated owner of the resource.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Own profile

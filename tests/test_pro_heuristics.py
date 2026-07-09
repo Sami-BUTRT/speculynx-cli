@@ -12,8 +12,13 @@ from speculynx.scanner import run_audit
 FIXTURES = Path(__file__).parent / "fixtures"
 RISKY_FIXTURE = FIXTURES / "openapi_pro_risky.yaml"
 CLEAN_FIXTURE = FIXTURES / "openapi_clean.yaml"
+BOLA_PROTECTED_FIXTURE = FIXTURES / "openapi_bola_protected.yaml"
+ADMIN_SCOPED_FIXTURE = FIXTURES / "openapi_admin_scoped.yaml"
 RATE_LIMITED_FIXTURE = FIXTURES / "openapi_rate_limited.yaml"
 PUBLIC_HEALTH_FIXTURE = FIXTURES / "openapi_public_health.yaml"
+SENSITIVE_LEGITIMATE_FIXTURE = FIXTURES / "openapi_sensitive_legitimate.yaml"
+SECRET_PLACEHOLDERS_FIXTURE = FIXTURES / "openapi_secret_placeholders.yaml"
+SSRF_BENIGN_FIXTURE = FIXTURES / "openapi_ssrf_benign.yaml"
 BASE_FIXTURE = FIXTURES / "api_test.yaml"
 PRO_RULE_IDS = {
     "BOLA-001",
@@ -24,6 +29,42 @@ PRO_RULE_IDS = {
     "RATE-001",
     "INV-001",
 }
+PRUDENCE_MARKERS = (
+    "peut",
+    "potentiel",
+    "à vérifier",
+    "si",
+    "non documenté",
+    "semble",
+    "pattern",
+    "heuristique",
+    "statique",
+    "pourrait",
+)
+FORBIDDEN_CERTAINTY_PHRASES = (
+    "vulnérable avec certitude",
+    "faille confirmée",
+    "exploitation confirmée",
+    "compromis",
+    "exploitable avec certitude",
+    "compromission",
+)
+ACTION_MARKERS = (
+    "vérifiez",
+    "vérifier",
+    "contrôle",
+    "côté serveur",
+    "gateway",
+    "scopes",
+    "rôles",
+    "minimisées",
+    "masquées",
+    "rotation",
+    "révocation",
+    "isolation tenant",
+    "allowlist",
+    "tags",
+)
 
 
 def rule_by_id(results: list, rule_id: str) -> dict:
@@ -41,6 +82,12 @@ class ProHeuristicRuleTests(unittest.TestCase):
 
         self.assertTrue(PRO_RULE_IDS.issubset({result["id"] for result in results}))
 
+    def test_clean_api_does_not_trigger_major_pro_heuristics(self):
+        results = run_audit(CLEAN_FIXTURE, is_pro=True)
+
+        for rule_id in PRO_RULE_IDS:
+            self.assertTrue(rule_by_id(results, rule_id)["passed"], rule_id)
+
     def test_bola_triggers_on_object_identifier_route(self):
         results = run_audit(RISKY_FIXTURE, is_pro=True)
 
@@ -56,6 +103,15 @@ class ProHeuristicRuleTests(unittest.TestCase):
         rule = rule_by_id(results, "BOLA-001")
         self.assertTrue(rule["passed"])
 
+    def test_bola_protected_object_route_remains_prudent_if_reported(self):
+        results = run_audit(BOLA_PROTECTED_FIXTURE, is_pro=True)
+
+        rule = rule_by_id(results, "BOLA-001")
+        self.assertFalse(rule["passed"])
+        self.assertIn("Ce n'est pas une preuve de BOLA", rule["fail_message"])
+        self.assertIn("L'analyse statique", rule["fail_message"])
+        self.assertIn("isolation tenant", rule["fail_message"])
+
     def test_bfla_triggers_on_admin_route_without_precise_authorization(self):
         results = run_audit(RISKY_FIXTURE, is_pro=True)
 
@@ -65,7 +121,7 @@ class ProHeuristicRuleTests(unittest.TestCase):
         self.assertIn("peut indiquer un risque BFLA", rule["fail_message"])
 
     def test_bfla_does_not_trigger_with_precise_scopes(self):
-        results = run_audit(CLEAN_FIXTURE, is_pro=True)
+        results = run_audit(ADMIN_SCOPED_FIXTURE, is_pro=True)
 
         rule = rule_by_id(results, "BFLA-001")
         self.assertTrue(rule["passed"])
@@ -85,6 +141,15 @@ class ProHeuristicRuleTests(unittest.TestCase):
         rule = rule_by_id(results, "DATA-001")
         self.assertTrue(rule["passed"])
 
+    def test_sensitive_data_legitimate_case_remains_contextual(self):
+        results = run_audit(SENSITIVE_LEGITIMATE_FIXTURE, is_pro=True)
+
+        rule = rule_by_id(results, "DATA-001")
+        self.assertFalse(rule["passed"])
+        self.assertEqual("MOYENNE", rule["severity"])
+        self.assertIn("selon le contexte métier", rule["fail_message"])
+        self.assertIn("minimisées", rule["fail_message"])
+
     def test_secret_example_triggers_on_live_key_pattern(self):
         results = run_audit(RISKY_FIXTURE, is_pro=True)
 
@@ -94,7 +159,7 @@ class ProHeuristicRuleTests(unittest.TestCase):
         self.assertIn("placeholder neutre", rule["fail_message"])
 
     def test_secret_example_ignores_placeholders(self):
-        results = run_audit(CLEAN_FIXTURE, is_pro=True)
+        results = run_audit(SECRET_PLACEHOLDERS_FIXTURE, is_pro=True)
 
         rule = rule_by_id(results, "SECRET-001")
         self.assertTrue(rule["passed"])
@@ -106,6 +171,15 @@ class ProHeuristicRuleTests(unittest.TestCase):
         self.assertFalse(rule["passed"])
         self.assertIn("URL fournie par le client", rule["fail_message"])
         self.assertIn("dépend de l'usage serveur", rule["description"])
+        self.assertIn("ne confirme pas l'usage backend", rule["fail_message"])
+
+    def test_ssrf_benign_url_fields_remain_prudent_if_reported(self):
+        results = run_audit(SSRF_BENIGN_FIXTURE, is_pro=True)
+
+        rule = rule_by_id(results, "SSRF-001")
+        self.assertFalse(rule["passed"])
+        self.assertIn("Si le serveur la contacte", rule["fail_message"])
+        self.assertIn("ne confirme pas l'usage backend", rule["fail_message"])
 
     def test_rate_limit_triggers_on_sensitive_endpoint_without_documentation(self):
         results = run_audit(RISKY_FIXTURE, is_pro=True)
@@ -126,6 +200,7 @@ class ProHeuristicRuleTests(unittest.TestCase):
         rule = rule_by_id(results, "INV-001")
         self.assertFalse(rule["passed"])
         self.assertIn("versioning de l'API", rule["fail_message"])
+        self.assertIn("À vérifier", rule["fail_message"])
 
     def test_pro_pdf_export_generates_non_empty_file_without_backend(self):
         runner = CliRunner()
@@ -151,6 +226,65 @@ class ProHeuristicRuleTests(unittest.TestCase):
             self.assertEqual(0, result.exit_code, result.output)
             self.assertTrue(output_path.exists())
             self.assertGreater(output_path.stat().st_size, 0)
+
+    def test_pro_pdf_export_with_pro_findings_generates_non_empty_file_without_backend(self):
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "pro-risk-report.pdf"
+            with patch("speculynx.main._load_saved_license_key", return_value="test-key"):
+                with patch(
+                    "speculynx.main.verify_license_online",
+                    return_value={"valid": True, "plan": "pro", "status": "active"},
+                ):
+                    result = runner.invoke(
+                        main.app,
+                        [
+                            "scan",
+                            "--file",
+                            str(RISKY_FIXTURE),
+                            "--export",
+                            str(output_path),
+                        ],
+                    )
+
+            self.assertEqual(0, result.exit_code, result.output)
+            self.assertTrue(output_path.exists())
+            self.assertGreater(output_path.stat().st_size, 0)
+
+    def test_pro_findings_use_prudent_non_certain_wording(self):
+        results = run_audit(RISKY_FIXTURE, is_pro=True)
+
+        for rule_id in PRO_RULE_IDS:
+            rule = rule_by_id(results, rule_id)
+            self.assertFalse(rule["passed"], rule_id)
+            text = " ".join(
+                str(value)
+                for value in (rule["name"], rule["description"], rule["fail_message"])
+                if value
+            ).lower()
+            self.assertTrue(
+                any(marker in text for marker in PRUDENCE_MARKERS),
+                f"{rule_id} lacks prudent wording: {text}",
+            )
+            for forbidden in FORBIDDEN_CERTAINTY_PHRASES:
+                self.assertNotIn(forbidden, text)
+
+    def test_pro_findings_include_pedagogical_action_markers(self):
+        results = run_audit(RISKY_FIXTURE, is_pro=True)
+
+        for rule_id in PRO_RULE_IDS:
+            rule = rule_by_id(results, rule_id)
+            self.assertFalse(rule["passed"], rule_id)
+            text = " ".join(
+                str(value)
+                for value in (rule["description"], rule["fail_message"])
+                if value
+            ).lower()
+            self.assertTrue(
+                any(marker in text for marker in ACTION_MARKERS),
+                f"{rule_id} lacks actionable guidance: {text}",
+            )
 
 
 if __name__ == "__main__":

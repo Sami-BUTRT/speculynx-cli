@@ -1,0 +1,32 @@
+openapi: 3.0.3
+info:
+  title: Scoped Admin API
+  version: 1.0.0
+servers:
+  - url: https://api.example.test
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: Access token expires after 15 minutes.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.test/oauth/authorize
+          tokenUrl: https://auth.example.test/oauth/token
+          scopes:
+            roles:write: Update user roles
+security:
+  - OAuth2:
+      - roles:write
+paths:
+  /admin/users:
+    patch:
+      tags:
+        - admin
+      operationId: updateRole
+      security:
+        - OAuth2:
+            - roles:write
+      responses:
+        "204":
+          description: Updated

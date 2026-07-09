@@ -29,6 +29,21 @@ components:
         api_key:
           type: string
           example: sk_live_1234567890abcdef
+        github_token:
+          type: string
+          default: ghp_1234567890abcdef1234567890abcdef
+        pat:
+          type: string
+          example: github_pat_1234567890abcdef1234567890abcdef
+        aws_key:
+          type: string
+          example: AKIA1234567890ABCDEF
+        bearer:
+          type: string
+          example: Bearer abcdefghijklmnopqrstuvwxyz1234567890
+        jwt:
+          type: string
+          example: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123456
 paths:
   /users/{userId}:
     get:
@@ -74,6 +89,31 @@ paths:
       responses:
         "200":
           description: Logged in
+  /password-reset:
+    post:
+      responses:
+        "200":
+          description: Reset requested
+  /otp:
+    post:
+      responses:
+        "200":
+          description: OTP verified
+  /search:
+    get:
+      responses:
+        "200":
+          description: Search completed
+  /export:
+    get:
+      responses:
+        "200":
+          description: Export completed
+  /generate:
+    post:
+      responses:
+        "200":
+          description: Generated
   /v1/legacy:
     get:
       deprecated: true

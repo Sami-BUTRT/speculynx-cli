@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: Benign URL Fields API
+  version: 1.0.0
+servers:
+  - url: https://api.example.test
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT expires after 15 minutes.
+  schemas:
+    AvatarUpdate:
+      type: object
+      properties:
+        avatarUrl:
+          type: string
+        imageUrl:
+          type: string
+        websiteUrl:
+          type: string
+        documentationUrl:
+          type: string
+security:
+  - BearerAuth: []
+paths:
+  /profile/avatar:
+    post:
+      tags:
+        - profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvatarUpdate"
+      responses:
+        "204":
+          description: Updated

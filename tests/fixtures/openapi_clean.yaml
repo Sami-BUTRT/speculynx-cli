@@ -14,11 +14,10 @@ components:
           authorizationUrl: https://auth.example.test/oauth/authorize
           tokenUrl: https://auth.example.test/oauth/token
           scopes:
-            users:read: Read user resources
-            admin:roles:write: Manage user roles
+            catalog:read: Read catalog entries
 security:
   - OAuth2:
-      - users:read
+      - catalog:read
 paths:
   /health:
     get:
@@ -28,36 +27,10 @@ paths:
       responses:
         "200":
           description: OK
-  /users/{userId}:
+  /catalog:
     get:
       tags:
-        - users
-      security:
-        - OAuth2:
-            - users:read
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
+        - catalog
       responses:
         "200":
-          description: User summary
-  /admin/users/{userId}/role:
-    patch:
-      tags:
-        - admin
-      operationId: updateRole
-      security:
-        - OAuth2:
-            - admin:roles:write
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: Updated
+          description: Public catalog summary
