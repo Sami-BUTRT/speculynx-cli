@@ -54,9 +54,45 @@ class FixtureScanTests(unittest.TestCase):
 
         results = run_audit(fixture_path, is_pro=False)
 
-        self.assertEqual(["KEY-EXP-01", "KEY-EXP-02"], [r["id"] for r in results])
+        self.assertEqual(
+            ["KEY-EXP-01", "HTTP-001", "KEY-EXP-02"],
+            [r["id"] for r in results],
+        )
         self.assertFalse(results[0]["passed"])
         self.assertFalse(results[1]["passed"])
+        self.assertFalse(results[2]["passed"])
+
+    def test_http_server_url_triggers_free_rule(self):
+        with tempfile.TemporaryDirectory() as directory:
+            file_path = Path(directory) / "openapi.json"
+            file_path.write_text(json.dumps({
+                "openapi": "3.0.3",
+                "info": {"title": "HTTP API", "version": "1.0.0"},
+                "servers": [{"url": "http://api.example.test"}],
+                "paths": {},
+            }), encoding="utf-8")
+
+            results = run_audit(file_path, is_pro=False)
+
+        http_rule = next(r for r in results if r["id"] == "HTTP-001")
+        self.assertFalse(http_rule["passed"])
+        self.assertEqual("HTTP non sécurisé", http_rule["name"])
+        self.assertEqual("ÉLEVÉE", http_rule["severity"])
+
+    def test_https_server_url_does_not_trigger_free_rule(self):
+        with tempfile.TemporaryDirectory() as directory:
+            file_path = Path(directory) / "openapi.json"
+            file_path.write_text(json.dumps({
+                "openapi": "3.0.3",
+                "info": {"title": "HTTPS API", "version": "1.0.0"},
+                "servers": [{"url": "https://api.example.test"}],
+                "paths": {},
+            }), encoding="utf-8")
+
+            results = run_audit(file_path, is_pro=False)
+
+        http_rule = next(r for r in results if r["id"] == "HTTP-001")
+        self.assertTrue(http_rule["passed"])
 
     def test_scan_output_uses_ascii_prefixes(self):
         fixture_path = Path(__file__).parent / "fixtures" / "api_test.yaml"

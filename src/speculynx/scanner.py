@@ -135,6 +135,25 @@ def check_free_key_exposure(openapi_data: dict) -> dict:
         "fail_message": "Des clés API sont passées en paramètres de requête (Query string)."
     }
 
+def check_free_insecure_http_server(openapi_data: dict) -> dict:
+    passed = True
+    servers = openapi_data.get('servers', []) or []
+    for server in servers:
+        if not isinstance(server, dict):
+            continue
+        url = server.get('url')
+        if isinstance(url, str) and url.lower().startswith('http://'):
+            passed = False
+            break
+    return {
+        "id": "HTTP-001",
+        "name": "HTTP non sécurisé",
+        "severity": "ÉLEVÉE",
+        "passed": passed,
+        "description": "Vérifie si l'API est documentée avec une URL serveur en HTTP non chiffré.",
+        "fail_message": "L'API est documentée comme accessible en clair via HTTP, ce qui expose requêtes, tokens et données à l'interception."
+    }
+
 def check_free_no_expiration(openapi_data: dict) -> dict:
     """Vérifie que les schémas d'auth basés sur une clé/token statique documentent
     un mécanisme d'expiration. Cible désormais les security schemes eux-mêmes
@@ -238,7 +257,11 @@ def check_pro_over_permissioned(openapi_data: dict) -> dict:
 
 def run_audit(file_path: Path, is_pro: bool = False) -> list:
     openapi_data = load_openapi_file(file_path)
-    rules_to_run = [check_free_key_exposure, check_free_no_expiration]
+    rules_to_run = [
+        check_free_key_exposure,
+        check_free_insecure_http_server,
+        check_free_no_expiration,
+    ]
     if is_pro:
         rules_to_run.extend([check_pro_identity_context, check_pro_ai_agent_risk, check_pro_over_permissioned])
 
