@@ -335,10 +335,16 @@ def check_free_key_exposure(openapi_data: dict) -> dict:
     for path, methods in paths.items():
         if not isinstance(methods, dict):
             continue
+        common_params = methods.get('parameters', []) or []
+        if not isinstance(common_params, list):
+            common_params = []
         for method, config in methods.items():
             if not isinstance(config, dict):
                 continue
-            params = config.get('parameters', []) or []
+            operation_params = config.get('parameters', []) or []
+            if not isinstance(operation_params, list):
+                operation_params = []
+            params = [*common_params, *operation_params]
             for p in params:
                 if not isinstance(p, dict):
                     continue

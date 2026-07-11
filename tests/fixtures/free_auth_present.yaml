@@ -1,0 +1,18 @@
+openapi: 3.1.0
+info:
+  title: Protected API
+  version: 1.0.0
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Token expires after 15 minutes.
+security:
+  - BearerAuth: []
+paths:
+  /items:
+    get:
+      responses:
+        "200":
+          description: OK

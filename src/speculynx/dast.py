@@ -22,12 +22,17 @@ def forge_url(base_url: str, path: str, params: dict) -> str:
     return url
 
 def get_path_params(methods: dict) -> dict:
-    """Extrait les paramètres de path depuis la spec."""
+    """Extrait les paramètres de path communs et propres aux opérations."""
     params = {}
+    common_params = methods.get("parameters", []) or []
+    if isinstance(common_params, list):
+        for parameter in common_params:
+            if isinstance(parameter, dict) and parameter.get("in") == "path":
+                params[parameter.get("name")] = "1"
     for method, config in methods.items():
         if isinstance(config, dict):
             for p in config.get("parameters", []):
-                if p.get("in") == "path":
+                if isinstance(p, dict) and p.get("in") == "path":
                     params[p.get("name")] = "1"
     return params
 

@@ -1,12 +1,19 @@
+import re
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 from unittest.mock import patch
 
 from typer.testing import CliRunner
 
 from speculynx import main
-from speculynx.scanner import run_audit
+from speculynx.scanner import (
+    check_pro_ai_agent_risk,
+    check_pro_identity_context,
+    check_pro_over_permissioned,
+    run_audit,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -71,7 +78,89 @@ def rule_by_id(results: list, rule_id: str) -> dict:
     return next(result for result in results if result["id"] == rule_id)
 
 
+def decoded_pdf_streams(path: Path) -> bytes:
+    decoded = []
+    for stream in re.findall(rb"stream\r?\n(.*?)\r?\nendstream", path.read_bytes(), re.DOTALL):
+        try:
+            decoded.append(zlib.decompress(stream))
+        except zlib.error:
+            decoded.append(stream)
+    return b"\n".join(decoded)
+
+
 class ProHeuristicRuleTests(unittest.TestCase):
+    def test_identity_context_rule_positive_and_negative_cases(self):
+        risky = check_pro_identity_context({
+            "components": {
+                "securitySchemes": {
+                    "ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "X-API-Key"}
+                }
+            }
+        })
+        clean = check_pro_identity_context({
+            "components": {
+                "securitySchemes": {
+                    "OAuth2": {"type": "oauth2", "flows": {}}
+                }
+            }
+        })
+
+        self.assertFalse(risky["passed"])
+        self.assertEqual("KEY-PRO-01", risky["id"])
+        self.assertEqual("ÉLEVÉE", risky["severity"])
+        self.assertTrue(clean["passed"])
+
+    def test_ai_agent_rule_positive_and_mitigated_cases(self):
+        risky = check_pro_ai_agent_risk({
+            "paths": {"/users/{id}": {"delete": {"responses": {"204": {}}}}}
+        })
+        mitigated = check_pro_ai_agent_risk({
+            "paths": {
+                "/users/{id}": {
+                    "delete": {
+                        "description": "Requires explicit confirmation and MFA verification.",
+                        "responses": {"204": {}},
+                    }
+                }
+            }
+        })
+
+        self.assertFalse(risky["passed"])
+        self.assertEqual("KEY-PRO-02", risky["id"])
+        self.assertEqual("CRITIQUE", risky["severity"])
+        self.assertTrue(mitigated["passed"])
+
+    def test_over_permissioned_rule_positive_and_scoped_cases(self):
+        risky = check_pro_over_permissioned({
+            "components": {
+                "securitySchemes": {
+                    "OAuth2": {
+                        "type": "oauth2",
+                        "flows": {"clientCredentials": {"scopes": {}}},
+                    }
+                }
+            }
+        })
+        scoped = check_pro_over_permissioned({
+            "components": {
+                "securitySchemes": {
+                    "OAuth2": {
+                        "type": "oauth2",
+                        "flows": {
+                            "clientCredentials": {
+                                "scopes": {"catalog:read": "Read catalog"}
+                            }
+                        },
+                    }
+                }
+            }
+        })
+
+        self.assertFalse(risky["passed"])
+        self.assertEqual("KEY-PRO-03", risky["id"])
+        self.assertEqual("ÉLEVÉE", risky["severity"])
+        self.assertTrue(scoped["passed"])
+
     def test_free_scan_does_not_run_pro_heuristics(self):
         results = run_audit(RISKY_FIXTURE, is_pro=False)
 
@@ -226,6 +315,9 @@ class ProHeuristicRuleTests(unittest.TestCase):
             self.assertEqual(0, result.exit_code, result.output)
             self.assertTrue(output_path.exists())
             self.assertGreater(output_path.stat().st_size, 0)
+            pdf_text = decoded_pdf_streams(output_path)
+            self.assertIn(b"SPECULYNX", pdf_text)
+            self.assertIn("Clés exposées".encode("latin-1"), pdf_text)
 
     def test_pro_pdf_export_with_pro_findings_generates_non_empty_file_without_backend(self):
         runner = CliRunner()

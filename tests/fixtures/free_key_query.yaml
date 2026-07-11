@@ -1,0 +1,25 @@
+openapi: 3.0.0
+info:
+  title: Query Key API
+  version: 1.0.0
+servers:
+  - url: https://api.example.test
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Token expires after 15 minutes.
+security:
+  - BearerAuth: []
+paths:
+  /items:
+    parameters:
+      - name: api_key
+        in: query
+        schema:
+          type: string
+    get:
+      responses:
+        "200":
+          description: OK

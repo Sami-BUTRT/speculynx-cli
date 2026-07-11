@@ -65,6 +65,25 @@ class ConsoleOutputTests(unittest.TestCase):
         for codepoint in DECORATIVE_CODEPOINTS:
             self.assertNotIn(chr(codepoint), output)
 
+    def test_pro_pdf_export_is_safe_on_strict_cp1252_streams(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "rapport.pdf"
+            with tempfile.TemporaryFile(
+                mode="w+", encoding="cp1252", errors="strict"
+            ) as stdout, tempfile.TemporaryFile(
+                mode="w+", encoding="cp1252", errors="strict"
+            ) as stderr:
+                with patch(
+                    "speculynx.main._load_saved_license_key", return_value="test-key"
+                ), patch(
+                    "speculynx.main.verify_license_online",
+                    return_value={"valid": True, "plan": "pro", "status": "active"},
+                ), redirect_stdout(stdout), redirect_stderr(stderr):
+                    main.scan(file=FIXTURE_PATH, export=output_path)
+
+            self.assertTrue(output_path.exists())
+            self.assertGreater(output_path.stat().st_size, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
