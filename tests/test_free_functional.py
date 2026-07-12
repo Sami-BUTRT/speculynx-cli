@@ -7,7 +7,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from speculynx import main
-from speculynx.scanner import load_openapi_file, run_audit
+from speculynx.scanner import check_free_no_expiration, load_openapi_file, run_audit
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -64,8 +64,29 @@ class FreeFunctionalTests(unittest.TestCase):
         risky = rule_by_id(self.audit_fixture("free_key_no_expiration.yaml"), "KEY-EXP-02")
         clean = rule_by_id(self.audit_fixture("free_key_expiration.yaml"), "KEY-EXP-02")
 
-        self.assert_readable_finding(risky, name="Absence d'expiration des clés", severity="MOYENNE")
+        self.assert_readable_finding(risky, name="Rotation ou durée de vie des clés API non documentée", severity="MOYENNE")
         self.assertTrue(clean["passed"])
+
+    def test_key_lifetime_rule_ignores_token_protocol_schemes_and_generic_api_keys(self):
+        schemes = {
+            "Bearer": {"type": "http", "scheme": "bearer"},
+            "BearerJwt": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
+            "OAuth": {"type": "oauth2", "flows": {}},
+            "OpenId": {"type": "openIdConnect", "openIdConnectUrl": "https://issuer.example.test/.well-known/openid-configuration"},
+            "HeaderKey": {"type": "apiKey", "in": "header", "name": "X-API-Key"},
+            "QueryKey": {"type": "apiKey", "in": "query", "name": "api_key"},
+        }
+        for name, scheme in schemes.items():
+            with self.subTest(name=name):
+                result = check_free_no_expiration({"components": {"securitySchemes": {name: scheme}}})
+                self.assertTrue(result["passed"])
+
+        static_key = check_free_no_expiration({
+            "components": {"securitySchemes": {
+                "StaticKey": {"type": "apiKey", "in": "header", "name": "X-API-Key", "description": "Static API key for clients."}
+            }}
+        })
+        self.assertFalse(static_key["passed"])
 
     def test_yaml_and_json_openapi_files_are_accepted(self):
         yaml_document = load_openapi_file(FIXTURES / "free_auth_present.yaml")

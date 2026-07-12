@@ -138,7 +138,7 @@ Free rules include:
 - `KEY-EXP-01`: keys or tokens exposed in query parameters.
 - `HTTP-001`: insecure `http://` server URLs.
 - `AUTH-001`: missing documented authentication.
-- `KEY-EXP-02`: missing documented key/token expiration.
+- `KEY-EXP-02`: rotation or lifetime undocumented for an API key explicitly described as static or durable.
 
 Free scans are explicitly partial: they run the four rules above and list the
 Pro rules that were not executed. A Free scan with no finding reports an

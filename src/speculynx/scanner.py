@@ -423,33 +423,37 @@ def check_free_missing_authentication(openapi_data: dict) -> dict:
     }
 
 def check_free_no_expiration(openapi_data: dict) -> dict:
-    """Vérifie que les schémas d'auth basés sur une clé/token statique documentent
-    un mécanisme d'expiration. Cible désormais les security schemes eux-mêmes
-    (description, ou présence de oauth2 avec refresh) plutôt qu'un substring
-    sur toute la spec, qui matchait à tort 'example', 'expand', 'experience'.
+    """Signale seulement une apiKey explicitement décrite comme statique/durable
+    sans information de rotation ou de durée de vie.
+
+    OpenAPI ne permet pas d'inférer la durée de vie d'un bearer/JWT, OAuth2 ou
+    OpenID Connect. Une apiKey générique n'est pas non plus un signal suffisant.
     """
     passed = True
-    expiration_keywords = ["exp", "ttl", "expire", "expiration", "duration", "refresh"]
+    lifecycle_keywords = [
+        "rotate", "rotation", "revoke", "revocation", "expire", "expiration",
+        "ttl", "duration", "durée", "lifetime", "refresh",
+    ]
+    durable_keywords = ["static", "permanent", "long-lived", "long lived", "longue durée"]
     schemes = get_security_schemes(openapi_data)
 
-    key_based_schemes = {
-        name: s for name, s in schemes.items()
-        if isinstance(s, dict) and s.get('type') in ('apiKey', 'http')
-    }
-
-    for name, scheme in key_based_schemes.items():
+    for scheme in schemes.values():
+        if not isinstance(scheme, dict) or scheme.get('type') != 'apiKey':
+            continue
         description = (scheme.get('description') or '').lower()
-        if not any(exp in description for exp in expiration_keywords):
+        if any(keyword in description for keyword in durable_keywords) and not any(
+            keyword in description for keyword in lifecycle_keywords
+        ):
             passed = False
             break
 
     return {
         "id": "KEY-EXP-02",
-        "name": "Absence d'expiration des clés",
+        "name": "Rotation ou durée de vie des clés API non documentée",
         "severity": "MOYENNE",
         "passed": passed,
-        "description": "Vérifie si les schémas d'authentification par clé/token documentent un cycle de vie ou une expiration.",
-        "fail_message": "Aucune mention d'expiration/cycle de vie trouvée dans la description des schémas d'authentification."
+        "description": "Vérifie si une clé API explicitement décrite comme statique ou durable documente une rotation ou durée de vie.",
+        "fail_message": "Cette clé API est décrite comme statique ou durable, sans rotation ni durée de vie documentée."
     }
 
 # ==============================================================================
@@ -810,7 +814,7 @@ FREE_RULES = (
     {"id": "KEY-EXP-01", "name": "Clés exposées dans l'URL", "check": check_free_key_exposure},
     {"id": "HTTP-001", "name": "HTTP non sécurisé", "check": check_free_insecure_http_server},
     {"id": "AUTH-001", "name": "Authentification manquante", "check": check_free_missing_authentication},
-    {"id": "KEY-EXP-02", "name": "Absence d'expiration des clés", "check": check_free_no_expiration},
+    {"id": "KEY-EXP-02", "name": "Rotation ou durée de vie des clés API non documentée", "check": check_free_no_expiration},
 )
 
 PRO_RULES = (

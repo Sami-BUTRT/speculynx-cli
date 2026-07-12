@@ -12,3 +12,8 @@ and tests for clean Free scans, Free findings, Pro-only risks, OpenAPI 3.0/3.1,
 invalid inputs, threshold ordering, stdout purity and counter consistency.
 Version prepared: 0.1.4. No package was published and no OpenAPI document is
 sent to the licensing service.
+
+The Free key-lifetime rule was then narrowed: bearer/JWT, OAuth2 and OpenID
+Connect do not expose token lifetime structurally in OpenAPI and are not
+flagged. `KEY-EXP-02` now applies only to an `apiKey` explicitly described as
+static or durable without documented rotation or lifetime.
