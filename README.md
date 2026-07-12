@@ -10,7 +10,29 @@ access.
 
 ## Install
 
-From a local checkout:
+Install Python 3.10, 3.11, 3.12, or 3.13. A virtual environment is
+recommended:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install speculynx
+```
+
+Verify the installation:
+
+```powershell
+speculynx --help
+speculynx scan --file openapi.yaml
+```
+
+Free static scans work immediately without a license or backend connection.
+For Pro features, run `speculynx login`: the command prompts interactively for
+the license key with hidden input, verifies it with the licensing backend, and
+stores a valid key in the operating-system credential store.
+
+From a local source checkout, contributors can instead use:
 
 ```powershell
 python -m pip install -e .
@@ -41,6 +63,18 @@ Authorization: Bearer <license_key>
 
 The key is stored with the operating-system credential store through `keyring`.
 Legacy `~/.speculynx.json` files are ignored.
+
+## Installation troubleshooting
+
+- `speculynx` not found: activate the virtual environment or ensure its
+  `Scripts` directory is in `PATH`.
+- Wrong Python or pip: use `python -m pip` so pip matches the intended
+  interpreter.
+- Unsupported Python: install Python 3.10 through 3.13.
+- File not found: verify the path passed to `--file`.
+- Swagger 2.0 rejected: convert the document to OpenAPI 3.0 or 3.1.
+- Pro feature refused: check the stored license with `speculynx info`, then use
+  `speculynx login` again if needed.
 
 ## Free Scan
 
