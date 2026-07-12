@@ -43,8 +43,8 @@ class ConsoleOutputTests(unittest.TestCase):
     def test_scan_output_is_safe_on_strict_cp1252_streams(self):
         output = self.capture_free_scan()
 
-        self.assertIn("[FREE] Mode Free", output)
-        self.assertIn("[RESULT] Résultat", output)
+        self.assertIn("SCAN PARTIEL — MODE FREE", output)
+        self.assertIn("Couverture : partielle", output)
 
     def test_safe_echo_replaces_unencodable_characters(self):
         with tempfile.TemporaryFile(

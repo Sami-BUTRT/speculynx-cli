@@ -1,7 +1,10 @@
+import json as jsonlib
+from enum import Enum
 import typer
 from typing import Optional
 from pathlib import Path
-from speculynx.scanner import run_audit
+from speculynx import __version__
+from speculynx.scanner import build_scan_result, load_openapi_file, run_audit
 from speculynx.dast import run_dast_audit
 from speculynx.utils import (
     LicenseKeyStorageError,
@@ -18,6 +21,16 @@ app = typer.Typer(
     help="Speculynx : L'outil CLI d'audit de sécurité pour API REST.",
     add_completion=False
 )
+
+JSON_SCHEMA_VERSION = "1.0"
+
+
+class FailOn(str, Enum):
+    critical = "critical"
+    high = "high"
+    medium = "medium"
+    low = "low"
+    never = "never"
 
 def _load_saved_license_key(*, allow_free_on_error: bool = False) -> str | None:
     try:
@@ -88,7 +101,9 @@ def info():
 @app.command()
 def scan(
     file: Path = typer.Option(..., "--file", "-f", help="Fichier OpenAPI à auditer.", exists=True),
-    export: Optional[Path] = typer.Option(None, "--export", "-e", help="[Pro] Exporter le rapport PDF.")
+    export: Optional[Path] = typer.Option(None, "--export", "-e", help="[Pro] Exporter le rapport PDF."),
+    json_output: bool = typer.Option(False, "--json", help="Émet uniquement un document JSON versionné sur stdout."),
+    fail_on: FailOn = typer.Option(FailOn.never, "--fail-on", help="Seuil CI : critical, high, medium, low ou never."),
 ):
     """Lance l'audit de sécurité statique sur une spec OpenAPI."""
     saved_key = _load_saved_license_key(allow_free_on_error=True)
@@ -100,16 +115,55 @@ def scan(
         elif license_info.get("status") not in {"network_error", "unavailable"}:
             _delete_saved_license_key()
 
-    safe_echo(typer.style("[PRO] Mode Pro activé", fg=typer.colors.MAGENTA, bold=True) if is_pro else typer.style("[FREE] Mode Free", fg=typer.colors.YELLOW))
-    audit_results = run_audit(file, is_pro=is_pro)
-    _print_results(audit_results)
+    json_output = json_output if isinstance(json_output, bool) else False
+    fail_on = fail_on if isinstance(fail_on, FailOn) else FailOn.never
+    if not json_output:
+        safe_echo(typer.style("[PRO] Mode Pro activé", fg=typer.colors.MAGENTA, bold=True) if is_pro else typer.style("SCAN PARTIEL — MODE FREE", fg=typer.colors.YELLOW, bold=True))
+    try:
+        audit_results = run_audit(file, is_pro=is_pro)
+    except typer.Exit:
+        raise
+    except Exception:
+        safe_echo("[ERROR] Erreur interne inattendue pendant le scan.", err=True)
+        raise typer.Exit(code=3)
+    if any(result.get("id") == "SCAN-ERROR" for result in audit_results):
+        safe_echo("[ERROR] Une règle n'a pas pu être évaluée.", err=True)
+        raise typer.Exit(code=3)
+    openapi_version = load_openapi_file(file).get("openapi") if json_output else None
+    scan_result = build_scan_result(file, is_pro, audit_results, openapi_version)
+    if json_output:
+        payload = {
+            "schema_version": JSON_SCHEMA_VERSION,
+            "tool": {"name": "speculynx", "version": __version__},
+            "input": scan_result["input"],
+            "scan": {
+                "mode": scan_result["scan_mode"],
+                "coverage": {
+                    "status": scan_result["coverage_status"],
+                    "rules_executed": len(scan_result["rules_executed"]),
+                    "rules_skipped": len(scan_result["rules_skipped"]),
+                    "executed_rule_ids": [rule["id"] for rule in scan_result["rules_executed"]],
+                    "skipped_rule_ids": [rule["id"] for rule in scan_result["rules_skipped"]],
+                },
+            },
+            "summary": scan_result["summary"],
+            "findings": scan_result["findings"],
+            "verdict": scan_result["verdict"],
+        }
+        typer.echo(jsonlib.dumps(payload, ensure_ascii=False, sort_keys=True))
+    else:
+        _print_scan_results(audit_results, scan_result)
 
     if export:
         if is_pro:
             generate_pdf_report(file.name, audit_results, export)
             safe_echo(f"[OK] Rapport exporté : {export}")
         else:
-            safe_echo(typer.style("[ERROR] Export refusé. Membres Pro uniquement.", fg=typer.colors.RED))
+            safe_echo(typer.style("[ERROR] Export refusé. Membres Pro uniquement.", fg=typer.colors.RED), err=True)
+            raise typer.Exit(code=4)
+
+    if _threshold_reached(scan_result["findings"], fail_on):
+        raise typer.Exit(code=1)
 
 @app.command(name="scan-live")
 def scan_live(
@@ -179,6 +233,44 @@ def _print_results(results: list):
             safe_echo(f"   -> {result['fail_message']}")
     safe_echo("")
     safe_echo(typer.style(f"[RESULT] Résultat : {passed_count} OK / {failed_count} échec(s)", bold=True))
+
+
+def _print_scan_results(results: list, scan_result: dict) -> None:
+    safe_echo("")
+    safe_echo(f"Règles exécutées : {len(scan_result['rules_executed'])}")
+    safe_echo(f"Règles non exécutées : {len(scan_result['rules_skipped'])}")
+    safe_echo("")
+    safe_echo("Contrôles exécutés")
+    for rule in scan_result["rules_executed"]:
+        safe_echo(f"[CHECK] {rule['id']} — {rule['name']}")
+    if scan_result["rules_skipped"]:
+        safe_echo("")
+        safe_echo("Contrôles non exécutés")
+        for rule in scan_result["rules_skipped"]:
+            safe_echo(f"[SKIP] {rule['id']} — {rule['name']} : non analysé dans ce mode")
+    safe_echo("")
+    for result in results:
+        if not result["passed"]:
+            safe_echo(typer.style(f"[FINDING] [{result['severity']}] {result['name']}", fg=typer.colors.RED))
+            safe_echo(f"   -> {result['fail_message']}")
+    count = scan_result["summary"]["total_findings"]
+    safe_echo(f"{count} problème{'s' if count != 1 else ''} détecté{'s' if count != 1 else ''} parmi {len(scan_result['rules_executed'])} règles exécutées.")
+    safe_echo(f"Couverture : {'partielle' if scan_result['coverage_status'] == 'partial' else 'complète'}")
+    verdicts = {
+        "indeterminate": "indéterminé",
+        "findings_detected": "risques détectés",
+        "no_findings_full_coverage": "aucun finding dans la couverture exécutée",
+    }
+    safe_echo(f"Verdict global : {verdicts[scan_result['verdict']]}")
+    safe_echo("Ce résultat ne constitue pas une validation complète de la sécurité de l’API.")
+
+
+def _threshold_reached(findings: list, fail_on: FailOn) -> bool:
+    if fail_on == FailOn.never:
+        return False
+    ranks = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+    threshold = ranks[fail_on.value]
+    return any(ranks.get(finding.get("severity"), 0) >= threshold for finding in findings)
 
 if __name__ == "__main__":
     app()

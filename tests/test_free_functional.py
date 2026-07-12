@@ -94,10 +94,11 @@ class FreeFunctionalTests(unittest.TestCase):
 
         self.assertEqual(0, result.exit_code, result.output)
         verify_license.assert_not_called()
-        self.assertIn("[FREE] Mode Free", result.output)
-        self.assertIn("[RESULT] Résultat", result.output)
+        self.assertIn("SCAN PARTIEL — MODE FREE", result.output)
+        self.assertIn("Couverture : partielle", result.output)
         for rule_id in PRO_RULE_IDS:
-            self.assertNotIn(rule_id, result.output)
+            self.assertIn(f"[SKIP] {rule_id}", result.output)
+            self.assertNotIn(f"[FINDING] {rule_id}", result.output)
 
     def test_free_cli_pdf_export_is_blocked_without_creating_file(self):
         runner = CliRunner()
@@ -117,7 +118,7 @@ class FreeFunctionalTests(unittest.TestCase):
                     ],
                 )
 
-            self.assertEqual(0, result.exit_code, result.output)
+            self.assertEqual(4, result.exit_code, result.output)
             verify_license.assert_not_called()
             self.assertFalse(output_path.exists())
             self.assertIn("Export refusé", result.output)

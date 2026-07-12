@@ -37,7 +37,7 @@ def safe_echo(message=None, *, err: bool = False, **kwargs) -> None:
 
 def _warn_if_legacy_storage_exists() -> None:
     if LEGACY_CONFIG_FILE.exists():
-        safe_echo(LEGACY_STORAGE_WARNING)
+        safe_echo(LEGACY_STORAGE_WARNING, err=True)
 
 
 def save_license_key(key: str) -> None:

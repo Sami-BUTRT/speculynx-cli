@@ -24,7 +24,7 @@ class OpenAPIVersionTests(unittest.TestCase):
     def assert_document_rejected(self, document: dict) -> None:
         with redirect_stdout(StringIO()), self.assertRaises(typer.Exit) as raised:
             self.load_document(document)
-        self.assertEqual(raised.exception.exit_code, 1)
+        self.assertEqual(raised.exception.exit_code, 2)
 
     def test_accepts_openapi_3_0_0(self):
         document = self.load_document({"openapi": "3.0.0"})
@@ -271,9 +271,9 @@ class FixtureScanTests(unittest.TestCase):
         self.assertEqual(0, result.exit_code, result.output)
         for symbol in ("⚡", "🚨", "✅", "❌", "⚠️", "🛑", "📄", "🌐", "📊", "↳"):
             self.assertNotIn(symbol, result.output)
-        self.assertIn("[FREE] Mode Free", result.output)
-        self.assertIn("[SCAN] [FINDING]", result.output)
-        self.assertIn("[RESULT] Résultat", result.output)
+        self.assertIn("SCAN PARTIEL — MODE FREE", result.output)
+        self.assertIn("[FINDING]", result.output)
+        self.assertIn("Couverture : partielle", result.output)
 
 
 if __name__ == "__main__":

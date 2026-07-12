@@ -1,6 +1,6 @@
 import unittest
 import tempfile
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -146,14 +146,16 @@ class ScanModeAuthorizationTests(unittest.TestCase):
     ):
         export_path = Path("report.pdf")
 
-        main.scan(file=FIXTURE_PATH, export=export_path)
+        with self.assertRaises(typer.Exit) as raised:
+            main.scan(file=FIXTURE_PATH, export=export_path)
+        self.assertEqual(4, raised.exception.exit_code)
 
         load_license_key.assert_called_once_with(allow_free_on_error=True)
         verify_license.assert_not_called()
         run_audit.assert_called_once_with(FIXTURE_PATH, is_pro=False)
         generate_pdf.assert_not_called()
         rendered_output = " ".join(str(call) for call in echo.call_args_list)
-        self.assertIn("Mode Free", rendered_output)
+        self.assertIn("SCAN PARTIEL", rendered_output)
         self.assertIn("Export refusé", rendered_output)
 
     @patch("speculynx.main._delete_saved_license_key")
@@ -177,7 +179,9 @@ class ScanModeAuthorizationTests(unittest.TestCase):
             "status": "invalid",
         }
 
-        main.scan(file=FIXTURE_PATH, export=Path("report.pdf"))
+        with self.assertRaises(typer.Exit) as raised:
+            main.scan(file=FIXTURE_PATH, export=Path("report.pdf"))
+        self.assertEqual(4, raised.exception.exit_code)
 
         load_license_key.assert_called_once_with(allow_free_on_error=True)
         verify_license.assert_called_once_with(TEST_KEY)
@@ -206,7 +210,9 @@ class ScanModeAuthorizationTests(unittest.TestCase):
             "status": "network_error",
         }
 
-        main.scan(file=FIXTURE_PATH, export=Path("report.pdf"))
+        with self.assertRaises(typer.Exit) as raised:
+            main.scan(file=FIXTURE_PATH, export=Path("report.pdf"))
+        self.assertEqual(4, raised.exception.exit_code)
 
         load_license_key.assert_called_once_with(allow_free_on_error=True)
         verify_license.assert_called_once_with(TEST_KEY)
@@ -334,7 +340,7 @@ class LicenseKeyStorageTests(unittest.TestCase):
 
             with patch.object(utils, "LEGACY_CONFIG_FILE", legacy_file):
                 output = StringIO()
-                with redirect_stdout(output):
+                with redirect_stderr(output):
                     self.assertIsNone(utils.load_license_key())
 
             self.assertTrue(legacy_file.exists())

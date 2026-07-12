@@ -197,8 +197,8 @@ def load_openapi_file(file_path: Path) -> dict:
                 raise ValueError("Format non supporté (uniquement .json, .yaml, .yml).")
         return validate_openapi_version(openapi_data)
     except Exception as e:
-        safe_echo(typer.style(f"[ERROR] Erreur de chargement : {e}", fg=typer.colors.RED))
-        raise typer.Exit(code=1)
+        safe_echo(typer.style(f"[ERROR] Erreur de chargement : {e}", fg=typer.colors.RED), err=True)
+        raise typer.Exit(code=2)
 
 
 def resolve_ref(ref: str, root: dict) -> dict:
@@ -788,25 +788,7 @@ def check_pro_inventory_versioning(openapi_data: dict) -> dict:
 
 def run_audit(file_path: Path, is_pro: bool = False) -> list:
     openapi_data = load_openapi_file(file_path)
-    rules_to_run = [
-        check_free_key_exposure,
-        check_free_insecure_http_server,
-        check_free_missing_authentication,
-        check_free_no_expiration,
-    ]
-    if is_pro:
-        rules_to_run.extend([
-            check_pro_identity_context,
-            check_pro_ai_agent_risk,
-            check_pro_over_permissioned,
-            check_pro_bola_patterns,
-            check_pro_bfla_privileged_routes,
-            check_pro_sensitive_data,
-            check_pro_secret_examples,
-            check_pro_ssrf_inputs,
-            check_pro_rate_limit_documentation,
-            check_pro_inventory_versioning,
-        ])
+    rules_to_run = [rule["check"] for rule in rules_for_mode(is_pro)]
 
     results = []
     for rule in rules_to_run:
@@ -822,3 +804,68 @@ def run_audit(file_path: Path, is_pro: bool = False) -> list:
                 "fail_message": f"Erreur interne : {e}"
             })
     return results
+
+
+FREE_RULES = (
+    {"id": "KEY-EXP-01", "name": "Clés exposées dans l'URL", "check": check_free_key_exposure},
+    {"id": "HTTP-001", "name": "HTTP non sécurisé", "check": check_free_insecure_http_server},
+    {"id": "AUTH-001", "name": "Authentification manquante", "check": check_free_missing_authentication},
+    {"id": "KEY-EXP-02", "name": "Absence d'expiration des clés", "check": check_free_no_expiration},
+)
+
+PRO_RULES = (
+    {"id": "KEY-PRO-01", "name": "Contexte d'identité", "check": check_pro_identity_context},
+    {"id": "KEY-PRO-02", "name": "Risques liés aux agents IA", "check": check_pro_ai_agent_risk},
+    {"id": "KEY-PRO-03", "name": "Autorisations trop larges", "check": check_pro_over_permissioned},
+    {"id": "BOLA-001", "name": "Indicateurs BOLA", "check": check_pro_bola_patterns},
+    {"id": "BFLA-001", "name": "Indicateurs BFLA", "check": check_pro_bfla_privileged_routes},
+    {"id": "DATA-001", "name": "Exposition de données sensibles", "check": check_pro_sensitive_data},
+    {"id": "SECRET-001", "name": "Secrets dans les exemples", "check": check_pro_secret_examples},
+    {"id": "SSRF-001", "name": "Entrées potentiellement SSRF", "check": check_pro_ssrf_inputs},
+    {"id": "RATE-001", "name": "Documentation du rate limiting", "check": check_pro_rate_limit_documentation},
+    {"id": "INV-001", "name": "Inventaire et versioning", "check": check_pro_inventory_versioning},
+)
+
+
+def rules_for_mode(is_pro: bool) -> tuple:
+    return FREE_RULES + PRO_RULES if is_pro else FREE_RULES
+
+
+def skipped_rules_for_mode(is_pro: bool) -> tuple:
+    return () if is_pro else PRO_RULES
+
+
+def build_scan_result(file_path: Path, is_pro: bool, results: list, openapi_version: str | None = None) -> dict:
+    executed = rules_for_mode(is_pro)
+    skipped = skipped_rules_for_mode(is_pro)
+    findings = [result for result in results if not result.get("passed", False)]
+    coverage_status = "full" if is_pro else "partial"
+    verdict = "findings_detected" if findings else (
+        "no_findings_full_coverage" if is_pro else "indeterminate"
+    )
+    severities = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    severity_names = {
+        "CRITIQUE": "critical", "ÉLEVÉE": "high", "ELEVEE": "high",
+        "MOYENNE": "medium", "FAIBLE": "low", "INFO": "info",
+    }
+    serialized_findings = []
+    for finding in findings:
+        severity = severity_names.get(str(finding.get("severity", "INFO")).upper(), "info")
+        severities[severity] += 1
+        serialized_findings.append({
+            "rule_id": finding.get("id"),
+            "title": finding.get("name"),
+            "severity": severity,
+            "description": finding.get("description"),
+            "message": finding.get("fail_message"),
+        })
+    return {
+        "scan_mode": "pro" if is_pro else "free",
+        "coverage_status": coverage_status,
+        "rules_executed": [{"id": rule["id"], "name": rule["name"]} for rule in executed],
+        "rules_skipped": [{"id": rule["id"], "name": rule["name"]} for rule in skipped],
+        "findings": serialized_findings,
+        "summary": {"total_findings": len(findings), **severities},
+        "verdict": verdict,
+        "input": {"file": str(file_path), "openapi_version": openapi_version},
+    }
