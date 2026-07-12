@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.4 - 2026-07-13
+
+### Added
+
+- Added stable JSON schema `1.0` output with `--json`.
+- Added configurable CI thresholds with `--fail-on` and documented exit codes.
+
+### Changed
+
+- Free scans now report partial coverage, executed and skipped rules, and an
+  indeterminate verdict when no Free finding is detected.
+- Invalid inputs now return exit code 2; internal rule failures return 3; an
+  explicitly unavailable Pro export returns 4.
+
+No new detection rule was added, and Free scanning remains local and offline.
+
 ## 0.1.3 - 2026-07-11
 
 ### Changed

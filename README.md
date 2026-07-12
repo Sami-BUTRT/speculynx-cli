@@ -91,7 +91,7 @@ stores a valid key in the operating-system credential store.
 After a package build, install the wheel locally:
 
 ```powershell
-python -m pip install dist\speculynx-0.1.3-py3-none-any.whl
+python -m pip install dist\speculynx-0.1.4-py3-none-any.whl
 ```
 
 ## Commands
@@ -139,6 +139,55 @@ Free rules include:
 - `HTTP-001`: insecure `http://` server URLs.
 - `AUTH-001`: missing documented authentication.
 - `KEY-EXP-02`: missing documented key/token expiration.
+
+Free scans are explicitly partial: they run the four rules above and list the
+Pro rules that were not executed. A Free scan with no finding reports an
+indeterminate global verdict; it is not a validation that the API is secure.
+OpenAPI files stay local. License verification sends no OpenAPI content to the
+licensing service.
+
+## JSON and CI/CD
+
+Use `--json` for a single machine-readable JSON document on stdout:
+
+```bash
+speculynx scan --file openapi.yaml --json
+```
+
+Schema `1.0` includes the tool and input versions, scan mode, coverage,
+executed and skipped rule IDs, severity counts, findings, and verdict.
+Compatible fields may be added within schema `1.0`; removing or renaming a
+field requires a new schema version.
+
+Use `--fail-on` with `critical`, `high`, `medium`, `low`, or `never` (the
+backward-compatible default). A threshold blocks on that severity and higher:
+
+```bash
+speculynx scan --file openapi.yaml --json --fail-on high > speculynx-report.json
+```
+
+Minimal GitHub Actions step:
+
+```yaml
+- name: Audit OpenAPI
+  run: |
+    speculynx scan \
+      --file openapi.yaml \
+      --json \
+      --fail-on high \
+      > speculynx-report.json
+```
+
+Exit codes:
+
+- `0`: scan completed and no finding reached the configured threshold;
+- `1`: at least one finding reached the threshold;
+- `2`: invalid argument, missing file, invalid JSON/YAML, or unsupported OpenAPI version;
+- `3`: unexpected internal rule failure;
+- `4`: a Pro-only operation was explicitly requested but unavailable.
+
+Exit `0` for a partial Free scan means only that no executed Free finding met
+the threshold. Coverage remains `partial` in both text and JSON.
 
 ## Pro Scan
 
