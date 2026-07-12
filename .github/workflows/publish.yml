@@ -1,0 +1,145 @@
+name: Publish Speculynx
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Publication target"
+        required: true
+        type: choice
+        options:
+          - testpypi
+          - pypi
+
+permissions:
+  contents: read
+
+jobs:
+  validate-target:
+    name: Validate publication target
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject an unsupported target
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          case "$TARGET" in
+            testpypi|pypi) ;;
+            *) echo "Unsupported publication target" >&2; exit 2 ;;
+          esac
+
+  build-and-test:
+    name: Build and test distributions
+    needs: validate-target
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install build and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+          python -m pip install .
+      - name: Run CLI tests
+        run: python -m unittest discover -s tests -v
+      - name: Build fresh distributions
+        run: |
+          rm -rf dist build src/*.egg-info
+          python -m build
+          python -m twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speculynx-distributions
+          path: dist/
+          if-no-files-found: error
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: build-and-test
+    if: ${{ inputs.target == 'testpypi' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: speculynx-distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          repository-url: https://test.pypi.org/legacy/
+
+  verify-testpypi:
+    name: Verify TestPyPI installation
+    needs: publish-testpypi
+    if: ${{ inputs.target == 'testpypi' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Wait for and install the exact TestPyPI release
+        run: |
+          python -m venv .release-venv
+          .release-venv/bin/python -m pip install --upgrade pip
+          for attempt in $(seq 1 12); do
+            if .release-venv/bin/python -m pip install \
+              --index-url https://test.pypi.org/simple/ \
+              --extra-index-url https://pypi.org/simple/ \
+              "speculynx==0.1.4"; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 12 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
+      - name: Validate the installed TestPyPI CLI
+        run: |
+          set -euo pipefail
+          CLI=.release-venv/bin/speculynx
+          test "$($CLI --version)" = "0.1.4"
+          $CLI --help >/dev/null
+          $CLI scan --file tests/fixtures/free_auth_present.yaml > jwt-scan.txt
+          grep -F "Couverture : partielle" jwt-scan.txt
+          grep -F "Verdict global : indéterminé" jwt-scan.txt
+          $CLI scan --file tests/fixtures/free_auth_present.yaml --json > jwt-report.json
+          .release-venv/bin/python - <<'PY'
+          import json
+
+          report = json.load(open("jwt-report.json", encoding="utf-8"))
+          assert report["scan"]["coverage"]["status"] == "partial"
+          assert report["verdict"] == "indeterminate"
+          assert not any(item["rule_id"] == "KEY-EXP-02" for item in report["findings"])
+          PY
+          $CLI scan --file tests/fixtures/free_auth_present.yaml --fail-on high
+          printf "swagger: '2.0'\ninfo:\n  title: Legacy\n  version: '1.0'\npaths: {}\n" > swagger-2.yaml
+          set +e
+          $CLI scan --file swagger-2.yaml --json >/dev/null 2>swagger-error.txt
+          status=$?
+          set -e
+          test "$status" -eq 2
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build-and-test
+    if: ${{ inputs.target == 'pypi' && github.ref == 'refs/tags/v0.1.4' }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: speculynx-distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
