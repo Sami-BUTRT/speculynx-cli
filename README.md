@@ -10,14 +10,70 @@ access.
 
 ## Install
 
-Install Python 3.10, 3.11, 3.12, or 3.13. A virtual environment is
-recommended:
+### Recommended on Debian and Ubuntu
+
+`pipx` installs Speculynx in an isolated Python environment without changing
+the system Python packages:
+
+```bash
+sudo apt update
+sudo apt install -y pipx
+pipx ensurepath
+pipx install speculynx
+speculynx --help
+```
+
+You may need to reopen your terminal after running `pipx ensurepath`.
+For an immediate one-session setup, you can also run:
+
+```bash
+export PATH="$PATH:$HOME/.local/bin"
+```
+
+The `export` command is not required for every user or shell. Once `pipx` is
+already installed, the generic installation command is:
+
+```bash
+pipx install speculynx
+```
+
+### Windows PowerShell
+
+```powershell
+py -m pip install --user pipx
+py -m pipx ensurepath
+pipx install speculynx
+speculynx --help
+```
+
+### macOS
+
+When `pipx` is already available on macOS, use:
+
+```bash
+pipx install speculynx
+speculynx --help
+```
+
+This page does not prescribe a macOS package manager setup.
+
+### Update or uninstall
+
+```bash
+pipx upgrade speculynx
+pipx uninstall speculynx
+```
+
+### Local source checkout
+
+For contributors working from a local checkout, a virtual environment remains
+the supported development workflow:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install speculynx
+python -m pip install -e .
 ```
 
 Verify the installation:
@@ -31,12 +87,6 @@ Free static scans work immediately without a license or backend connection.
 For Pro features, run `speculynx login`: the command prompts interactively for
 the license key with hidden input, verifies it with the licensing backend, and
 stores a valid key in the operating-system credential store.
-
-From a local source checkout, contributors can instead use:
-
-```powershell
-python -m pip install -e .
-```
 
 After a package build, install the wheel locally:
 
@@ -67,9 +117,10 @@ Legacy `~/.speculynx.json` files are ignored.
 ## Installation troubleshooting
 
 - `speculynx` not found: activate the virtual environment or ensure its
-  `Scripts` directory is in `PATH`.
-- Wrong Python or pip: use `python -m pip` so pip matches the intended
-  interpreter.
+  `Scripts` directory is in `PATH`; for a pipx install, reopen the terminal
+  after `pipx ensurepath`.
+- `pipx` not found on Debian/Ubuntu: install it with `sudo apt install -y pipx`,
+  then run `pipx ensurepath`.
 - Unsupported Python: install Python 3.10 through 3.13.
 - File not found: verify the path passed to `--file`.
 - Swagger 2.0 rejected: convert the document to OpenAPI 3.0 or 3.1.
