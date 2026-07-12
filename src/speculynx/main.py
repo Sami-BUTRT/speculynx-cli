@@ -19,7 +19,8 @@ from speculynx.utils import (
 app = typer.Typer(
     name="speculynx",
     help="Speculynx : L'outil CLI d'audit de sécurité pour API REST.",
-    add_completion=False
+    add_completion=False,
+    invoke_without_command=True,
 )
 
 JSON_SCHEMA_VERSION = "1.0"
@@ -31,6 +32,19 @@ class FailOn(str, Enum):
     medium = "medium"
     low = "low"
     never = "never"
+
+
+@app.callback()
+def app_callback(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", is_eager=True, help="Affiche la version de Speculynx."),
+) -> None:
+    if version:
+        typer.echo(__version__)
+        raise typer.Exit()
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
 
 def _load_saved_license_key(*, allow_free_on_error: bool = False) -> str | None:
     try:

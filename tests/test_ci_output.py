@@ -86,3 +86,8 @@ class CIOutputTests(unittest.TestCase):
         self.assertEqual(3, result.exit_code)
         self.assertEqual("", result.stdout)
         self.assertNotIn("secret detail", result.stderr)
+
+    def test_version_option_reports_the_package_version(self):
+        result = self.runner.invoke(main.app, ["--version"])
+        self.assertEqual(0, result.exit_code, result.output)
+        self.assertEqual("0.1.4\n", result.stdout)

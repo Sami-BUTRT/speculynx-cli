@@ -17,3 +17,6 @@ The Free key-lifetime rule was then narrowed: bearer/JWT, OAuth2 and OpenID
 Connect do not expose token lifetime structurally in OpenAPI and are not
 flagged. `KEY-EXP-02` now applies only to an `apiKey` explicitly described as
 static or durable without documented rotation or lifetime.
+
+Release validation also added the standard `speculynx --version` option so an
+isolated installation can identify the packaged version without importing code.

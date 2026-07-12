@@ -98,6 +98,7 @@ python -m pip install dist\speculynx-0.1.4-py3-none-any.whl
 
 ```powershell
 speculynx --help
+speculynx --version
 speculynx scan --file path\to\openapi.yaml
 speculynx login
 speculynx info
