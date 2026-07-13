@@ -1,4 +1,5 @@
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,10 +7,11 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from speculynx import main
+from speculynx import __version__, main
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CIOutputTests(unittest.TestCase):
@@ -34,6 +36,9 @@ class CIOutputTests(unittest.TestCase):
         for misleading in ("API sécurisée", "Scan réussi", "0 vulnérabilité", "OK /", "Aucun risque"):
             self.assertNotIn(misleading, result.output)
 
+        threshold_result = self.invoke("openapi_clean.yaml", "--fail-on", "high")
+        self.assertEqual(0, threshold_result.exit_code, threshold_result.output)
+
     def test_free_finding_and_pro_only_risk_semantics(self):
         finding = self.invoke("free_http_server.yaml", "--fail-on", "high")
         self.assertEqual(1, finding.exit_code, finding.output)
@@ -56,6 +61,7 @@ class CIOutputTests(unittest.TestCase):
             self.assertEqual("partial", payload["scan"]["coverage"]["status"])
             self.assertEqual(4, payload["scan"]["coverage"]["rules_executed"])
             self.assertEqual(10, payload["scan"]["coverage"]["rules_skipped"])
+            self.assertEqual("indeterminate", payload["verdict"])
             self.assertEqual(len(payload["findings"]), payload["summary"]["total_findings"])
             self.assertEqual(result.stdout.strip(), json.dumps(payload, ensure_ascii=False, sort_keys=True))
 
@@ -91,3 +97,25 @@ class CIOutputTests(unittest.TestCase):
         result = self.runner.invoke(main.app, ["--version"])
         self.assertEqual(0, result.exit_code, result.output)
         self.assertEqual("0.1.4\n", result.stdout)
+
+    def test_linux_user_installation_recommends_pipx_without_python_command(self):
+        readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        linux_install = readme.split("### Recommended on Debian and Ubuntu", 1)[1].split(
+            "### Windows PowerShell", 1
+        )[0]
+        shell_commands = "\n".join(re.findall(r"```bash\n(.*?)```", linux_install, flags=re.DOTALL))
+
+        self.assertIn("sudo apt install -y pipx", shell_commands)
+        self.assertIn("pipx install speculynx", shell_commands)
+        self.assertNotRegex(shell_commands, r"(?m)^\s*python(?:3(?:\.\d+)?)?\s")
+
+    def test_package_metadata_matches_code_and_declares_console_entrypoint(self):
+        pyproject = (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        project_version = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, flags=re.MULTILINE)
+
+        self.assertIsNotNone(project_version)
+        self.assertEqual(__version__, project_version.group(1))
+        self.assertRegex(
+            pyproject,
+            r'(?ms)^\[project\.scripts\]\s+speculynx\s*=\s*"speculynx\.main:app"',
+        )
