@@ -18,5 +18,6 @@ Publisher matching repository `Sami-BUTRT/speculynx-cli`, workflow
 workflow hash and no PyPI release proof yet; the public index still reports
 latest version `0.1.2` and the `0.1.4` JSON endpoint returns HTTP 404.
 
-Public `speculynx==0.1.4` and pipx installation checks, plus the web alignment,
+A second clean venv confirmed that public installation fails with `No matching
+distribution found for speculynx==0.1.4`. The pipx check and web alignment
 remain intentionally blocked until the PyPI Trusted Publisher is configured.
